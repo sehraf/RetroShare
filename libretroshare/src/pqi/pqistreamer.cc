@@ -37,7 +37,8 @@
 
 #include "serialiser/rsserial.h" 
 
-const int pqistreamerzone = 8221;
+static struct RsLog::logInfo pqistreamerzoneInfo = {RsLog::Default, "pqistreamer"};
+#define pqistreamerzone &pqistreamerzoneInfo
 
 static const int   PQISTREAM_ABS_MAX    			= 100000000; /* 100 MB/sec (actually per loop) */
 static const int   PQISTREAM_AVG_PERIOD 			= 5; 		// update speed estimate every 5 seconds
@@ -696,7 +697,7 @@ int pqistreamer::handleincoming_locked()
 	    allocate_rpend_locked();
 
     // enough space to read any packet.
-    int maxlen = mPkt_rpend_size; 
+    uint32_t maxlen = mPkt_rpend_size; 
     void *block = mPkt_rpending; 
 
     // initial read size: basic packet.
@@ -812,7 +813,7 @@ continue_packet:
 	    std::cerr << "[" << (void*)pthread_self() << "] " << "continuing packet state=" << mReading_state << std::endl ;
 	    std::cerr << "[" << (void*)pthread_self() << "] " << "block 1 : " << RsUtil::BinToHex(block,8) << std::endl;
 #endif
-	    if (extralen > maxlen - blen)
+	    if (extralen + (uint32_t)blen > maxlen)
 	    {
 		    pqioutput(PQL_ALERT, pqistreamerzone, "ERROR: Read Packet too Big!");
 
