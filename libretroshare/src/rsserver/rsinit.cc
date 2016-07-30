@@ -1243,8 +1243,6 @@ int RsServer::StartupRetroShare()
 	ftserver->setConfigDirectory(rsAccounts->PathAccountDirectory());
 
 	ftserver->SetupFtServer() ;
-	CacheStrapper *mCacheStrapper = ftserver->getCacheStrapper();
-	//CacheTransfer *mCacheTransfer = ftserver->getCacheTransfer();
 
 	/* setup any extra bits (Default Paths) */
 	ftserver->setPartialsDirectory(emergencyPartialsDir);
@@ -1288,7 +1286,6 @@ int RsServer::StartupRetroShare()
 	// These are needed to load plugins: plugin devs might want to know the place of
 	// cache directories, get pointers to cache strapper, or access ownId()
 	//
-	mPluginsManager->setCacheDirectories(localcachedir,remotecachedir) ;
 	mPluginsManager->setServiceControl(serviceCtrl) ;
 
 //	std::cerr << "rsinitconf (core 1) = " << (void*)rsInitConfig<<std::endl;
@@ -1619,10 +1616,6 @@ int RsServer::StartupRetroShare()
 	mLinkMgr->addMonitor(serviceCtrl);
 	mLinkMgr->addMonitor(serviceInfo);
 
-	// NOTE these were added in ftServer (was added twice).
-	//mLinkMgr->addMonitor(mCacheStrapper);
-	//mLinkMgr->addMonitor(((ftController *) mCacheTransfer));
-
 	// Services that have been changed to pqiServiceMonitor
 	serviceCtrl->registerServiceMonitor(msgSrv, msgSrv->getServiceInfo().mServiceType);
 	serviceCtrl->registerServiceMonitor(mDisc, mDisc->getServiceInfo().mServiceType);
@@ -1683,7 +1676,6 @@ int RsServer::StartupRetroShare()
 	 * after all the other configurations have happened.
 	 */
 
-	mConfigMgr->addConfiguration("cache.cfg", mCacheStrapper);
 	mConfigMgr->loadConfiguration();
 
 	/**************************************************************************/
