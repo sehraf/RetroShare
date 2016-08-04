@@ -2096,7 +2096,10 @@ void RsGxsNetService::updateServerSyncTS()
 	else
 			msui = mapIT->second;
 
-        // (cyril) I'm removing this, becuse mLastPost is *never* updated. So this code it not useful at all.
+        // (cyril) I'm removing this, because the msgUpdateTS is updated when new messages are received by calling locked_stampMsgServerUpdateTS().
+        //       mLastPost is actually updated somewhere when loading group meta data. It's not clear yet whether it is set to the latest publish time (wrong)
+        //		 or the latest receive time (right). The former would cause problems because it would need to compare times coming from different (potentially async-ed)
+        //		 machines.
         //
         // if(grpMeta->mLastPost > msui->msgUpdateTS )
         // {
@@ -4901,7 +4904,7 @@ bool RsGxsNetService::stampMsgServerUpdateTS(const RsGxsGroupId& gid)
 {
     RS_STACK_MUTEX(mNxsMutex) ;
 
-    locked_stampMsgServerUpdateTS(gid) ;
+    return locked_stampMsgServerUpdateTS(gid) ;
 }
 
 bool RsGxsNetService::locked_stampMsgServerUpdateTS(const RsGxsGroupId& gid)
