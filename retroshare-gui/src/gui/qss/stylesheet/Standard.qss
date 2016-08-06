@@ -213,7 +213,7 @@ CreateLobbyDialog QLabel#lobbyInfoLabel {
 }
 
 ChatWidget QTextEdit#chatTextEdit, ChatWidget QTextBrowser#textBrowser {
-	border: 1px solid #B8B6B1;
+	border: 1px solid #0099cc;
 	border-radius: 6px;
 	background: white;
 }
@@ -223,27 +223,6 @@ ChatWidget QFrame#infoFrame {
 	border-radius: 6px;
 	background: #FFFFD7;
 	background-color: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #FFFFD7, stop:1 #FFFFB2);
-}
-
-ChatWidget QPushButton#sendButton {
-	border-image: url(:/images/btn_green.png) 4;
-	border-width: 4;
-	padding: 0px 6px;
-	font-size: 14px;
-	font: bold;
-	color: white;
-}
-
-ChatWidget QPushButton#sendButton:hover {
-	border-image: url(:/images/btn_green_hover.png) 4;
-}
-
-ChatWidget QPushButton#sendButton:pressed {
-	border-image: url(:/images/btn_green_pressed.png) 4;
-}
-
-ChatWidget QPushButton#sendButton:disabled {
-	border-image: url(:/images/btn_red.png) 4;
 }
 
 PopupChatWindow QToolBar#chattoolBar{
