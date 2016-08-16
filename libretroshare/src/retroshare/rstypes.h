@@ -215,8 +215,7 @@ class FileInfo
         std::list<RsNodeGroupId> parent_groups ;
 };
 
-std::ostream &operator<<(std::ostream &out, const FileInfo &info);
-
+std::ostream &operator<<(std::ostream &out, const FileInfo& info);
 
 class DirStub
 {
@@ -246,6 +245,8 @@ public:
 	std::list<DirStub> children;
     std::list<RsNodeGroupId> parent_groups;	// parent groups for the shared directory
 };
+
+std::ostream &operator<<(std::ostream &out, const DirDetails& details);
 
 class FileDetail
 {
