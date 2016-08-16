@@ -450,10 +450,16 @@ void ChatLobbyDialog::addChatMsg(const ChatMessage& msg)
         RsIdentityDetails details ;
 
         QString name ;
-        if(rsIdentity->getIdDetails(gxs_id,details))
+        if(rsIdentity->getIdDetails(gxs_id,details)) {
             name = QString::fromUtf8(details.mNickname.c_str()) ;
-        else
-            name = QString::fromUtf8(msg.peer_alternate_nickname.c_str()) + " (" + QString::fromStdString(gxs_id.toStdString()) + ")" ;
+            if(name == "Anonymous")
+                // skip anon
+                return;
+        } else {
+            // skip unknown users
+            return;
+            //name = QString::fromUtf8(msg.peer_alternate_nickname.c_str()) + " (" + QString::fromStdString(gxs_id.toStdString()) + ")" ;
+        }
 
         ui.chatWidget->addChatMsg(msg.incoming, name, gxs_id, sendTime, recvTime, message, ChatWidget::MSGTYPE_NORMAL);
         emit messageReceived(msg.incoming, id(), sendTime, name, message) ;
