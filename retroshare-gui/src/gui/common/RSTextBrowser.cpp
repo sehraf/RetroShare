@@ -1,5 +1,6 @@
 #include <iostream>
 
+#include <QDir>
 #include <QDesktopServices>
 #include <QPainter>
 
@@ -84,8 +85,8 @@ QVariant RSTextBrowser::loadResource(int type, const QUrl &name)
 	// case 2: always trust the image if it comes from local Config or Data directories.
 
 	if(name.scheme().compare("file",Qt::CaseInsensitive)==0 && type == QTextDocument::ImageResource) {
-		if (name.path().startsWith(QString::fromUtf8(RsAccounts::ConfigDirectory().c_str()).prepend("/"),Qt::CaseInsensitive)
-		    || name.path().startsWith(QString::fromUtf8(RsAccounts::DataDirectory().c_str()).prepend("/"),Qt::CaseInsensitive))
+		if (name.path().startsWith(QDir(QString::fromUtf8(RsAccounts::ConfigDirectory().c_str())).absolutePath().prepend("/"),Qt::CaseInsensitive)
+		    || name.path().startsWith(QDir(QString::fromUtf8(RsAccounts::DataDirectory().c_str())).absolutePath().prepend("/"),Qt::CaseInsensitive))
 			return QTextBrowser::loadResource(type, name);
 	}
 
@@ -102,12 +103,7 @@ QVariant RSTextBrowser::loadResource(int type, const QUrl &name)
 	if (mImageBlockWidget)
 		mImageBlockWidget->show();
 
-	//https://git.merproject.org/lbt/qtbase/commit/6d13e9f29597e0d557857e3f80173faba5368424
-#if QT_VERSION >= QT_VERSION_CHECK (5, 0, 0)
-	return QPixmap(":/qt-project.org/styles/commonstyle/images/file-16.png");
-#else
-	return QPixmap(":/trolltech/styles/commonstyle/images/file-16.png");
-#endif
+	return QPixmap(":/images/imageblocked_24.png");
 }
 
 void RSTextBrowser::setImageBlockWidget(RSImageBlockWidget *widget)
