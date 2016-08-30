@@ -194,8 +194,6 @@ IdDialog::IdDialog(QWidget *parent) :
 	//mStateHelper->addClear(IDDIALOG_REPLIST, ui->treeWidget_RepList);
 
 	/* Connect signals */
-	connect(ui->toolButton_NewId, SIGNAL(clicked()), this, SLOT(addIdentity()));
-	connect(ui->toolButton_NewCircle, SIGNAL(clicked()), this, SLOT(createExternalCircle()));
 
 	connect(ui->removeIdentity, SIGNAL(triggered()), this, SLOT(removeIdentity()));
 	connect(ui->editIdentity, SIGNAL(triggered()), this, SLOT(editIdentity()));
@@ -211,7 +209,7 @@ IdDialog::IdDialog(QWidget *parent) :
 
 
 	ui->avLabel_Person->setPixmap(QPixmap(":/icons/png/people.png"));
-	ui->avlabel_Circles->setPixmap(QPixmap(":/icons/circles_128.png"));
+	ui->avlabel_Circles->setPixmap(QPixmap(":/icons/png/circles.png"));
 
 	ui->headerTextLabel_Person->setText(tr("People"));
 	ui->headerTextLabel_Circles->setText(tr("Circles"));
@@ -280,7 +278,18 @@ IdDialog::IdDialog(QWidget *parent) :
 	idTWHAction->setData(RSID_FILTER_BANNED);
 	connect(idTWHAction, SIGNAL(toggled(bool)), this, SLOT(filterToggled(bool)));
 	idTWHMenu->addAction(idTWHAction);
-
+	
+	QAction *CreateIDAction = new QAction(QIcon(":/icons/png/person.png"),tr("Create new Identity"), this);
+	connect(CreateIDAction, SIGNAL(triggered()), this, SLOT(addIdentity()));
+	
+	QAction *CreateCircleAction = new QAction(QIcon(":/icons/png/circles.png"),tr("Create new circle"), this);
+	connect(CreateCircleAction, SIGNAL(triggered()), this, SLOT(createExternalCircle()));
+	
+	QMenu *menu = new QMenu();
+	menu->addAction(CreateIDAction);
+	menu->addAction(CreateCircleAction);
+	ui->toolButton_New->setMenu(menu);
+	
 	/* Add filter actions */
 	QTreeWidgetItem *headerItem = ui->idTreeWidget->headerItem();
 	QString headerText = headerItem->text(RSID_COL_NICKNAME);
@@ -326,12 +335,10 @@ IdDialog::IdDialog(QWidget *parent) :
 			Signed identities are easier to trust but are easily linked to your node's IP address.</p>  \
 			<p><b>Anonymous identities</b> allow you to anonymously interact with other users. They cannot be   \
 			spoofed, but noone can prove who really owns a given identity.</p> \
-                	<p><b>External circles</b> are groups of identities (anonymous or signed), that are shared at a distance over the network. They can be \
+                    <p><b>Circles</b> are groups of identities (anonymous or signed), that are shared at a distance over the network. They can be \
                 		used to restrict the visibility to forums, channels, etc. </p> \
-                	<p>An <b>external circle</b> can be restricted to another circle, thereby limiting its visibility to members of that circle \
-                		or even self-restricted, meaning that it is only visible to its members.</p> \
-                	<p>A <b>local circle</b> is a group of friend nodes (represented by their PGP Ids), and can also be used to restrict the \
-                		visibility of forums and channels. They are not shared over the network, and their list of members is only visible to you.</p>") ;
+                    <p>An <b>circle</b> can be restricted to another circle, thereby limiting its visibility to members of that circle \
+                        or even self-restricted, meaning that it is only visible to invited members.</p>") ;
 
 	registerHelpButton(ui->helpButton, hlp_str) ;
 
