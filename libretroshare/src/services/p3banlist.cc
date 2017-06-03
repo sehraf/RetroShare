@@ -30,10 +30,11 @@
 #include "util/rsnet.h"
 
 #include "services/p3banlist.h"
-#include "serialiser/rsbanlistitems.h"
-#include "serialiser/rsconfigitems.h"
 #include "retroshare/rsdht.h"
 #include "retroshare/rsbanlist.h"
+
+#include "rsitems/rsbanlistitems.h"
+#include "rsitems/rsconfigitems.h"
 
 #include <sys/time.h>
 #include <sstream>
@@ -66,8 +67,8 @@
  */
 RsBanList *rsBanList = NULL ;
 
-p3BanList::p3BanList(p3ServiceControl *sc, p3NetMgr *nm)
-	:p3Service(), mBanMtx("p3BanList"), mServiceCtrl(sc), mNetMgr(nm) 
+p3BanList::p3BanList(p3ServiceControl *sc, p3NetMgr */*nm*/)
+	:p3Service(), mBanMtx("p3BanList"), mServiceCtrl(sc)//, mNetMgr(nm)
 {
 	addSerialType(new RsBanListSerialiser());
 
@@ -249,8 +250,8 @@ void p3BanList::autoFigureOutBanRanges()
 #endif
            BanListPeer& peer(mBanRanges[it->first]) ;
 
-       if(peer.reason == RSBANLIST_REASON_USER)
-           continue ;
+           if (peer.reason == RSBANLIST_REASON_USER)
+               continue;
 
            peer.addr = it->first ;
            peer.masked_bytes = 1 ;
@@ -969,10 +970,10 @@ bool p3BanList::addBanEntry(const RsPeerId &peerId, const struct sockaddr_storag
 			it->second.mLastUpdate = now;
 			updated = true;
 		}
-    }
+	}
 
-    if(updated)
-        IndicateConfigChanged();
+	if (updated)
+		IndicateConfigChanged() ;
 
 	return updated;
 }
@@ -1056,12 +1057,12 @@ int p3BanList::condenseBanSources_locked()
 
         struct sockaddr_storage bannedaddr;
         sockaddr_storage_clear(bannedaddr);
-    bannedaddr.ss_family = AF_INET ;
+        bannedaddr.ss_family = AF_INET;
         sockaddr_storage_copyip(bannedaddr, lit->second.addr);
         sockaddr_storage_setport(bannedaddr, 0);
 
-    if(isWhiteListed_locked(bannedaddr))
-        continue ;
+        if (isWhiteListed_locked(bannedaddr))
+            continue;
 
         /* check if it exists in the Set already */
         std::map<struct sockaddr_storage, BanListPeer>::iterator sit;

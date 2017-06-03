@@ -35,17 +35,17 @@
 #include "util/rsmemory.h"
 #include "util/rsprint.h"
 
-#include <serialiser/rsmsgitems.h>
+#include "rsitems/rsmsgitems.h"
 
-#include <retroshare/rsmsgs.h>
-#include <retroshare/rsidentity.h>
-#include <retroshare/rsiface.h>
+#include "retroshare/rsmsgs.h"
+#include "retroshare/rsidentity.h"
+#include "retroshare/rsiface.h"
 
-#include <rsserver/p3face.h>
-#include <services/p3idservice.h>
-#include <gxs/gxssecurity.h>
-#include <turtle/p3turtle.h>
-#include <retroshare/rsids.h>
+#include "rsserver/p3face.h"
+#include "services/p3idservice.h"
+#include "gxs/gxssecurity.h"
+#include "turtle/p3turtle.h"
+#include "retroshare/rsids.h"
 #include "distantchat.h"
 
 //#define DEBUG_DISTANT_CHAT
@@ -89,10 +89,10 @@ bool DistantChatService::handleOutgoingItem(RsChatItem *item)
     std::cerr << "p3ChatService::handleOutgoingItem(): sending to " << item->PeerId() << ": interpreted as a distant chat virtual peer id." << std::endl;
 #endif
     
-    uint32_t size = item->serial_size() ;
+    uint32_t size = RsChatSerialiser().size(item) ;
     RsTemporaryMemory mem(size) ;
     
-    if(!item->serialise(mem,size))
+    if(!RsChatSerialiser().serialise(item,mem,&size))
     {
         std::cerr << "(EE) serialisation error. Something's really wrong!" << std::endl;
         return false;
@@ -149,10 +149,10 @@ bool DistantChatService::acceptDataFromPeer(const RsGxsId& gxs_id,const RsGxsTun
 
             // we do not use handleOutGoingItem() because there's no distant chat contact, as the chat is refused.
             
-	    uint32_t size = item->serial_size() ;
+	    uint32_t size = RsChatSerialiser().size(item) ;
 	    RsTemporaryMemory mem(size) ;
 
-	    if(!item->serialise(mem,size))
+	    if(!RsChatSerialiser().serialise(item,mem,&size))
 	    {
 		    std::cerr << "(EE) serialisation error. Something's really wrong!" << std::endl;
 		    return false;
@@ -243,7 +243,9 @@ void DistantChatService::markDistantChatAsClosed(const DistantChatPeerId& dcpid)
         mDistantChatContacts.erase(it) ;
 }
 
-bool DistantChatService::initiateDistantChatConnexion(const RsGxsId& to_gxs_id, const RsGxsId& from_gxs_id, DistantChatPeerId& dcpid, uint32_t& error_code)
+bool DistantChatService::initiateDistantChatConnexion(
+        const RsGxsId& to_gxs_id, const RsGxsId& from_gxs_id,
+        DistantChatPeerId& dcpid, uint32_t& error_code, bool notify )
 {
     RsGxsTunnelId tunnel_id ;
 
@@ -259,47 +261,48 @@ bool DistantChatService::initiateDistantChatConnexion(const RsGxsId& to_gxs_id, 
 
     error_code = RS_DISTANT_CHAT_ERROR_NO_ERROR ;
 
-    // Make a self message to raise the chat window
-    
-    RsChatMsgItem *item = new RsChatMsgItem;
-    item->message = "[Starting distant chat. Please wait for secure tunnel to be established]" ;
-    item->chatFlags = RS_CHAT_FLAG_PRIVATE ;
-    item->sendTime = time(NULL) ;
-    item->PeerId(RsPeerId(tunnel_id)) ;
-    handleRecvChatMsgItem(item) ;
-    
-    delete item ;	// item is replaced by NULL if partial, but this is not the case here.
-    
+	if(notify)
+	{
+		// Make a self message to raise the chat window
+		RsChatMsgItem *item = new RsChatMsgItem;
+		item->message = "[Starting distant chat. Please wait for secure tunnel";
+		item->message += " to be established]";
+		item->chatFlags = RS_CHAT_FLAG_PRIVATE;
+		item->sendTime = time(NULL);
+		item->PeerId(RsPeerId(tunnel_id));
+		handleRecvChatMsgItem(item);
+		delete item ;
+	}
+
     return true ;
 }
 
 bool DistantChatService::getDistantChatStatus(const DistantChatPeerId& tunnel_id, DistantChatPeerInfo& cinfo) 
 {
-    RsStackMutex stack(mDistantChatMtx); /********** STACK LOCKED MTX ******/
+	RS_STACK_MUTEX(mDistantChatMtx);
 
-    RsGxsTunnelService::GxsTunnelInfo tinfo ;
+	RsGxsTunnelService::GxsTunnelInfo tinfo;
 
-    if(!mGxsTunnels->getTunnelInfo(RsGxsTunnelId(tunnel_id),tinfo))
-	    return false;
+	if(!mGxsTunnels->getTunnelInfo(RsGxsTunnelId(tunnel_id),tinfo)) return false;
 
-    cinfo.to_id  = tinfo.destination_gxs_id;
-    cinfo.own_id = tinfo.source_gxs_id;
-    cinfo.peer_id = tunnel_id;
+	cinfo.to_id  = tinfo.destination_gxs_id;
+	cinfo.own_id = tinfo.source_gxs_id;
+	cinfo.peer_id = tunnel_id;
 
-    switch(tinfo.tunnel_status)
-    {
-    case RsGxsTunnelService::RS_GXS_TUNNEL_STATUS_CAN_TALK : 		cinfo.status = RS_DISTANT_CHAT_STATUS_CAN_TALK;		
-	    						break ;
-    case RsGxsTunnelService::RS_GXS_TUNNEL_STATUS_TUNNEL_DN: 		cinfo.status = RS_DISTANT_CHAT_STATUS_TUNNEL_DN ;  		
-	    						break ;
-    case RsGxsTunnelService::RS_GXS_TUNNEL_STATUS_REMOTELY_CLOSED: 	cinfo.status = RS_DISTANT_CHAT_STATUS_REMOTELY_CLOSED ;	
-	    						break ;
-    default:
-    case  RsGxsTunnelService::RS_GXS_TUNNEL_STATUS_UNKNOWN: 		cinfo.status = RS_DISTANT_CHAT_STATUS_UNKNOWN;			
-	    						break ;
-    }
+	switch(tinfo.tunnel_status)
+	{
+	case RsGxsTunnelService::RS_GXS_TUNNEL_STATUS_CAN_TALK :
+		cinfo.status = RS_DISTANT_CHAT_STATUS_CAN_TALK; break;
+	case RsGxsTunnelService::RS_GXS_TUNNEL_STATUS_TUNNEL_DN:
+		cinfo.status = RS_DISTANT_CHAT_STATUS_TUNNEL_DN; break;
+	case RsGxsTunnelService::RS_GXS_TUNNEL_STATUS_REMOTELY_CLOSED:
+		cinfo.status = RS_DISTANT_CHAT_STATUS_REMOTELY_CLOSED; break;
+	case RsGxsTunnelService::RS_GXS_TUNNEL_STATUS_UNKNOWN:
+	default:
+		cinfo.status = RS_DISTANT_CHAT_STATUS_UNKNOWN; break;
+	}
 
-    return true ;
+	return true;
 }
 
 bool DistantChatService::closeDistantChatConnexion(const DistantChatPeerId &tunnel_id)

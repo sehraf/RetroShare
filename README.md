@@ -12,11 +12,15 @@ Build Status
 
 Compilation on Windows
 ----------------------------
-Follow this file : [WindowsMSys2_InstallGuide.md](https://github.com/RetroShare/RetroShare/blob/master/WindowsMSys2_InstallGuide.txt)
+Follow this file : [WindowsMSys2_InstallGuide.md](https://github.com/RetroShare/RetroShare/blob/master/WindowsMSys2_InstallGuide.md)
 
 Compilation on MacOSX
 ----------------------------
-Follow this file : [MacOS_X_InstallGuide.md](https://github.com/RetroShare/RetroShare/blob/master/MacOS_X_InstallGuide.txt)
+Follow this file : [MacOS_X_InstallGuide](https://github.com/RetroShare/RetroShare/blob/master/MacOS_X_InstallGuide.md)
+
+Compilation for Android
+---------------------------
+Follow this file : [README-Android](https://github.com/RetroShare/RetroShare/blob/master/README-Android.asciidoc)
 
 Compilation on Linux
 ----------------------------
@@ -40,7 +44,7 @@ Compilation on Linux
    * Arch Linux
    ```bash
    pacman -S base-devel libgnome-keyring libmicrohttpd libupnp libxslt \
-       libxss opencv qt4 speex sqlcipher
+       libxss opencv qt4 speex speexdsp sqlcipher
    ```
 
 2. Checkout the source code

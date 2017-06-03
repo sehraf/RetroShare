@@ -36,6 +36,8 @@
 #include "pqi/pqiservicemonitor.h"
 #include "pqi/p3linkmgr.h"
 
+class p3ServiceServer ;
+
 class ServiceNotifications
 {
 	public:
@@ -85,6 +87,7 @@ virtual const 	RsPeerId& getOwnId();
 	 */
 
 virtual bool getOwnServices(RsPeerServiceInfo &info);
+virtual std::string getServiceName(uint32_t service_id) ;
 
 	// This is what is passed to peers, can be displayed by GUI too.
 virtual bool getServicesAllowed(const RsPeerId &peerId, RsPeerServiceInfo &info);
@@ -99,6 +102,9 @@ virtual bool updateServicePermissions(uint32_t serviceId, const RsServicePermiss
 	// Get List of Peers using this Service.
 virtual void getPeersConnected(const uint32_t serviceId, std::set<RsPeerId> &peerSet);
 virtual bool isPeerConnected(const uint32_t serviceId, const RsPeerId &peerId);
+
+    // Gets the list of items used by that service
+virtual bool getServiceItemNames(uint32_t serviceId,std::map<uint8_t,std::string>& names) ;
 
 	/**
 	 * Registration for all Services.
@@ -130,6 +136,8 @@ virtual bool updateServicesProvided(const RsPeerId &peerId, const RsPeerServiceI
 
 	// pqiMonitor.
 virtual void    statusChange(const std::list<pqipeer> &plist);
+
+        virtual void setServiceServer(p3ServiceServer *p) { mServiceServer = p ; }
 
 protected:
 	// configuration.
@@ -195,6 +203,7 @@ bool peerHasPermissionForService_locked(const RsPeerId &peerId, uint32_t service
     // Below here is saved in Configuration.
     std::map<uint32_t, RsServicePermissions> mServicePermissionMap;
 
+    p3ServiceServer *mServiceServer ;
 };
 
 

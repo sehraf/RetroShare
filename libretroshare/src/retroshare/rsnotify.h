@@ -78,15 +78,16 @@ const uint32_t RS_FEED_TYPE_SECURITY = 0x0800;
 const uint32_t RS_FEED_TYPE_POSTED   = 0x1000;
 const uint32_t RS_FEED_TYPE_SECURITY_IP = 0x2000;
 
-const uint32_t RS_FEED_ITEM_PEER_CONNECT	    = RS_FEED_TYPE_PEER  | 0x0001;
-const uint32_t RS_FEED_ITEM_PEER_DISCONNECT	 = RS_FEED_TYPE_PEER  | 0x0002;
-const uint32_t RS_FEED_ITEM_PEER_HELLO		    = RS_FEED_TYPE_PEER  | 0x0003;
-const uint32_t RS_FEED_ITEM_PEER_NEW		    = RS_FEED_TYPE_PEER  | 0x0004;
+const uint32_t RS_FEED_ITEM_PEER_CONNECT            = RS_FEED_TYPE_PEER  | 0x0001;
+const uint32_t RS_FEED_ITEM_PEER_DISCONNECT         = RS_FEED_TYPE_PEER  | 0x0002;
+const uint32_t RS_FEED_ITEM_PEER_HELLO              = RS_FEED_TYPE_PEER  | 0x0003;
+const uint32_t RS_FEED_ITEM_PEER_NEW                = RS_FEED_TYPE_PEER  | 0x0004;
+const uint32_t RS_FEED_ITEM_PEER_OFFSET             = RS_FEED_TYPE_PEER  | 0x0005;
 
-const uint32_t RS_FEED_ITEM_SEC_CONNECT_ATTEMPT	    = RS_FEED_TYPE_SECURITY  | 0x0001;
-const uint32_t RS_FEED_ITEM_SEC_AUTH_DENIED	       = RS_FEED_TYPE_SECURITY  | 0x0002;
-const uint32_t RS_FEED_ITEM_SEC_UNKNOWN_IN	       = RS_FEED_TYPE_SECURITY  | 0x0003;
-const uint32_t RS_FEED_ITEM_SEC_UNKNOWN_OUT	       = RS_FEED_TYPE_SECURITY  | 0x0004;
+const uint32_t RS_FEED_ITEM_SEC_CONNECT_ATTEMPT     = RS_FEED_TYPE_SECURITY  | 0x0001;
+const uint32_t RS_FEED_ITEM_SEC_AUTH_DENIED         = RS_FEED_TYPE_SECURITY  | 0x0002;
+const uint32_t RS_FEED_ITEM_SEC_UNKNOWN_IN          = RS_FEED_TYPE_SECURITY  | 0x0003;
+const uint32_t RS_FEED_ITEM_SEC_UNKNOWN_OUT         = RS_FEED_TYPE_SECURITY  | 0x0004;
 const uint32_t RS_FEED_ITEM_SEC_WRONG_SIGNATURE     = RS_FEED_TYPE_SECURITY  | 0x0005;
 const uint32_t RS_FEED_ITEM_SEC_BAD_CERTIFICATE     = RS_FEED_TYPE_SECURITY  | 0x0006;
 const uint32_t RS_FEED_ITEM_SEC_INTERNAL_ERROR      = RS_FEED_TYPE_SECURITY  | 0x0007;
@@ -199,6 +200,9 @@ class RsNotify
 		virtual bool NotifyLogMessage(uint32_t &sysid, uint32_t &type, std::string &title, std::string &msg) = 0;
 
 		virtual bool GetFeedItem(RsFeedItem &item) = 0;
+
+        virtual bool cachePgpPassphrase               (const std::string& /* pgp_passphrase */) { return false ; }
+        virtual bool clearPgpPassphrase               () { return false ; }
 };
 
 class NotifyClient
@@ -224,6 +228,7 @@ class NotifyClient
 		virtual void notifyDiskFull                   (uint32_t           /* location  */, uint32_t                         /* size limit in MB */) {}
 		virtual void notifyPeerStatusChanged          (const std::string& /* peer_id   */, uint32_t                         /* status           */) {}
         virtual void notifyGxsChange                  (const RsGxsChanges& /* changes  */) {}
+		virtual void notifyConnectionWithoutCert      () {}
 
 		/* one or more peers has changed the states */
 		virtual void notifyPeerStatusChangedSummary   () {}

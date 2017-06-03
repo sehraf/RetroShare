@@ -77,6 +77,18 @@ void MimeTextEdit::insertFromMimeData(const QMimeData* source)
 		}
 	}
 #endif
+	if (source == NULL) return;
+
+	//insert retroshare links
+	QList<RetroShareLink> links;
+	RSLinkClipboard::parseText(source->text(), links);
+	if(links.size() > 0)
+	{
+		for(int i = 0; i < links.size(); ++i)
+			insertHtml(links[i].toHtml() + "<br>");
+
+		return;
+	}
 
 	return RSTextEdit::insertFromMimeData(source);
 }

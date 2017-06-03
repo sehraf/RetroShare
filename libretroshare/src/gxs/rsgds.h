@@ -32,8 +32,8 @@
 
 #include "inttypes.h"
 
-#include "serialiser/rsgxsitems.h"
-#include "serialiser/rsnxsitems.h"
+#include "rsitems/rsgxsitems.h"
+#include "rsitems/rsnxsitems.h"
 #include "gxs/rsgxsdata.h"
 #include "rsgxs.h"
 #include "util/contentvalue.h"
@@ -90,6 +90,8 @@ public:
 
     uint32_t mSuppliers ;
     uint32_t mMaxVisibleCount ;
+    bool     mGrpAutoSync ;
+    bool     mAllowMsgSync;
 };
 
 typedef std::map<RsGxsGroupId,      std::vector<RsNxsMsg*> > NxsMsgDataResult;

@@ -29,6 +29,7 @@
 #include <retroshare/rsfiles.h>
 #include <retroshare/rspeers.h>
 #include <retroshare/rsdht.h>
+#include "util/misc.h"
 
 #include <QTimer>
 
@@ -51,6 +52,16 @@ RelayPage::RelayPage(QWidget * parent, Qt::WindowFlags flags)
 
 	QObject::connect(ui.enableCheckBox,SIGNAL(stateChanged(int)),this,SLOT(updateEnabled()));
 	QObject::connect(ui.serverCheckBox,SIGNAL(stateChanged(int)),this,SLOT(updateEnabled()));
+
+	QObject::connect(ui.noFriendSpinBox,SIGNAL(valueChanged(int)),this,SLOT(updateTotals()));
+	QObject::connect(ui.bandFriendSpinBox,SIGNAL(valueChanged(int)),this,SLOT(updateTotals()));
+	QObject::connect(ui.noFOFSpinBox,SIGNAL(valueChanged(int)),this,SLOT(updateTotals()));
+	QObject::connect(ui.bandFOFSpinBox,SIGNAL(valueChanged(int)),this,SLOT(updateTotals()));
+	QObject::connect(ui.noGeneralSpinBox,SIGNAL(valueChanged(int)),this,SLOT(updateTotals()));
+	QObject::connect(ui.bandGeneralSpinBox,SIGNAL(valueChanged(int)),this,SLOT(updateTotals()));
+
+	QObject::connect(ui.enableCheckBox,SIGNAL(toggled(bool)),this,SLOT(updateRelayMode()));
+	QObject::connect(ui.serverCheckBox,SIGNAL(toggled(bool)),this,SLOT(updateRelayMode()));
 }
 
 QString RelayPage::helpText() const
@@ -66,10 +77,8 @@ QString RelayPage::helpText() const
 				  is encrypted and authenticated by the two relayed nodes.</p>") ;
 }
 
-	/** Saves the changes on this page */
-bool RelayPage::save(QString &/*errmsg*/)
+void RelayPage::updateTotals()
 {
-
 	int nFriends = ui.noFriendSpinBox->value();
 	int friendBandwidth = ui.bandFriendSpinBox->value();
 
@@ -85,7 +94,12 @@ bool RelayPage::save(QString &/*errmsg*/)
 	rsDht->setRelayAllowance(RSDHT_RELAY_CLASS_FRIENDS, nFriends, 1024 * friendBandwidth);
 	rsDht->setRelayAllowance(RSDHT_RELAY_CLASS_FOF, nFOF, 1024 * fofBandwidth);
 	rsDht->setRelayAllowance(RSDHT_RELAY_CLASS_GENERAL, nGeneral, 1024 * genBandwidth);
+}
 
+/** Saves the changes on this page */
+
+void RelayPage::updateRelayMode()
+{
 	uint32_t relayMode = 0;
 	if (ui.enableCheckBox->isChecked())
 	{
@@ -106,7 +120,6 @@ bool RelayPage::save(QString &/*errmsg*/)
 	}
 
 	rsDht->setRelayMode(relayMode);
-	return true;
 }
 
 	/** Loads the settings for this page */
@@ -115,35 +128,37 @@ void RelayPage::load()
 	uint32_t count;
 	uint32_t bandwidth;
 	rsDht->getRelayAllowance(RSDHT_RELAY_CLASS_FRIENDS, count, bandwidth);
-	ui.noFriendSpinBox->setValue(count);
-	ui.bandFriendSpinBox->setValue(bandwidth / 1000);
+	whileBlocking(ui.noFriendSpinBox)->setValue(count);
+	whileBlocking(ui.bandFriendSpinBox)->setValue(bandwidth / 1024);
 
 	rsDht->getRelayAllowance(RSDHT_RELAY_CLASS_FOF, count, bandwidth);
-	ui.noFOFSpinBox->setValue(count);
-	ui.bandFOFSpinBox->setValue(bandwidth / 1000);
+	whileBlocking(ui.noFOFSpinBox)->setValue(count);
+	whileBlocking(ui.bandFOFSpinBox)->setValue(bandwidth / 1024);
 
 	rsDht->getRelayAllowance(RSDHT_RELAY_CLASS_GENERAL, count, bandwidth);
-	ui.noGeneralSpinBox->setValue(count);
-	ui.bandGeneralSpinBox->setValue(bandwidth / 1000);
+	whileBlocking(ui.noGeneralSpinBox)->setValue(count);
+	whileBlocking(ui.bandGeneralSpinBox)->setValue(bandwidth / 1024);
+
+	updateTotals();
 
 
 	uint32_t relayMode = rsDht->getRelayMode();
 	if (relayMode & RSDHT_RELAY_ENABLED)
 	{
-		ui.enableCheckBox->setCheckState(Qt::Checked);
+		whileBlocking(ui.enableCheckBox)->setCheckState(Qt::Checked);
 		if ((relayMode & RSDHT_RELAY_MODE_MASK) == RSDHT_RELAY_MODE_OFF)
 		{
-			ui.serverCheckBox->setCheckState(Qt::Unchecked);
+			whileBlocking(ui.serverCheckBox)->setCheckState(Qt::Unchecked);
 		}
 		else
 		{
-			ui.serverCheckBox->setCheckState(Qt::Checked);
+			whileBlocking(ui.serverCheckBox)->setCheckState(Qt::Checked);
 		}
 	}
 	else
 	{
-		ui.enableCheckBox->setCheckState(Qt::Unchecked);
-		ui.serverCheckBox->setCheckState(Qt::Unchecked);
+		whileBlocking(ui.enableCheckBox)->setCheckState(Qt::Unchecked);
+		whileBlocking(ui.serverCheckBox)->setCheckState(Qt::Unchecked);
 	}
 
 	loadServers();
@@ -182,13 +197,9 @@ void RelayPage::updateRelayOptions()
 	int genBandwidth = ui.bandGeneralSpinBox->value();
 
 	ui.totalFriendLineEdit->setText(QString::number(nFriends * friendBandwidth * 2));
-
 	ui.totalFOFLineEdit->setText(QString::number(nFOF * fofBandwidth * 2));
-
 	ui.totalGeneralLineEdit->setText(QString::number(nGeneral * genBandwidth * 2));
-
 	ui.totalBandwidthLineEdit->setText(QString::number((nFriends * friendBandwidth + nFOF * fofBandwidth + nGeneral * genBandwidth) * 2));
-
 	ui.noTotalLineEdit->setText(QString::number(nFriends + nFOF + nGeneral));
 }
 
@@ -198,7 +209,7 @@ void RelayPage::updateEnabled()
 
 	if (ui.enableCheckBox->isChecked())
 	{
-		ui.groupBox->setEnabled(true);
+		ui.relayOptionGBox->setEnabled(true);
 		if (ui.serverCheckBox->isChecked())
 		{
 			std::cerr << "RelayPage::updateEnabled() Both Enabled" << std::endl;
@@ -213,7 +224,7 @@ void RelayPage::updateEnabled()
 	else
 	{
 		std::cerr << "RelayPage::updateEnabled() Both Disabled" << std::endl;
-		ui.groupBox->setEnabled(false);
+		ui.relayOptionGBox->setEnabled(false);
 		ui.serverGroupBox->setEnabled(false);
 	}
 

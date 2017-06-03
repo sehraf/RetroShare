@@ -42,7 +42,8 @@
 struct RsLog::logInfo p3netmgrzoneInfo = {RsLog::Default, "p3netmgr"};
 #define p3netmgrzone &p3netmgrzoneInfo
 
-#include "serialiser/rsconfigitems.h"
+#include "rsitems/rsconfigitems.h"
+
 #include "retroshare/rsiface.h"
 #include "retroshare/rsconfig.h"
 #include "retroshare/rsbanlist.h"
@@ -812,7 +813,7 @@ void p3NetMgrIMPL::netExtCheck()
 					address_votes[tmpip].n++ ;
 
 					/* XXX HACK TO FIX */
-#warning "ALLOWING ExtAddrFinder -> ExtAddrStableOk = true (which it is not normally)"
+#warning drbob: ALLOWING ExtAddrFinder -> ExtAddrStableOk = true (which it is not normally)
 					mNetFlags.mExtAddrStableOk = true;
                     
 		    std::cerr << "ExtAddrFinder reported external address " << sockaddr_storage_iptostring(tmpip) << std::endl;

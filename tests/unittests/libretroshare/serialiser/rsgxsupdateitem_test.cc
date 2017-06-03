@@ -8,24 +8,24 @@
 #include <gtest/gtest.h>
 
 #include "support.h"
-#include "serialiser/rsgxsupdateitems.h"
+#include "rsitems/rsgxsupdateitems.h"
 #define RS_SERVICE_TYPE_PLUGIN_SIMPLE_FORUM	0x0010
 
 RsSerialType* init_item(RsGxsGrpUpdateItem& i)
 {
 	i.clear();
 	i.grpUpdateTS = rand()%2424;
-    i.peerId = RsPeerId::random();
+    i.peerID = RsPeerId::random();
 	return new RsGxsUpdateSerialiser(RS_SERVICE_TYPE_PLUGIN_SIMPLE_FORUM);
 }
 
 RsSerialType* init_item(RsGxsMsgUpdateItem& i)
 {
 	i.clear();
-    i.peerId = RsPeerId::random();
+    i.peerID = RsPeerId::random();
 	int numUpdates = rand()%123;
 
-    i.peerId = RsPeerId::random();
+    i.peerID = RsPeerId::random();
 	for(int j=0; j < numUpdates; j++)
 	{
         struct RsGxsMsgUpdateItem::MsgUpdateInfo info;
@@ -56,7 +56,7 @@ RsSerialType* init_item(RsGxsServerMsgUpdateItem& i)
 bool operator ==(const RsGxsGrpUpdateItem& l, const RsGxsGrpUpdateItem& r)
 {
 	bool ok = l.grpUpdateTS == r.grpUpdateTS;
-	ok &= l.peerId == r.peerId;
+	ok &= l.peerID == r.peerID;
 
 	return ok;
 }
@@ -68,7 +68,7 @@ bool operator ==(const RsGxsMsgUpdateItem::MsgUpdateInfo& l, const RsGxsMsgUpdat
 
 bool operator ==(const RsGxsMsgUpdateItem& l, const RsGxsMsgUpdateItem& r)
 {
-	bool ok = l.peerId == r.peerId;
+	bool ok = l.peerID == r.peerID;
 
     const std::map<RsGxsGroupId, RsGxsMsgUpdateItem::MsgUpdateInfo>& lUp = l.msgUpdateInfos, rUp = r.msgUpdateInfos;
 

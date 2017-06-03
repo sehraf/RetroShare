@@ -35,6 +35,7 @@
 #include "util/HandleRichText.h"
 #include "util/DateTime.h"
 #include "util/stringutil.h"
+#include "gui/gxschannels/CreateGxsChannelMsg.h"
 
 #include <iostream>
 
@@ -63,9 +64,25 @@ GxsChannelPostItem::GxsChannelPostItem(FeedHolder *feedHolder, uint32_t feedId, 
 	std::cerr << std::endl;
 #endif
 
+	QVector<RsGxsMessageId> v;
+    bool self = false;
+
+	for(std::set<RsGxsMessageId>::const_iterator it(post.mOlderVersions.begin());it!=post.mOlderVersions.end();++it)
+    {
+        if(*it == post.mMeta.mMsgId)
+            self = true ;
+
+		v.push_back(*it) ;
+    }
+    if(!self)
+        v.push_back(post.mMeta.mMsgId);
+
+    setMessageVersions(v) ;
+
 	setup();
 
-	setGroup(group, false);
+	//setGroup(group, false);
+	requestGroup();
 	setPost(post);
 	requestComment();
 }
@@ -127,6 +144,7 @@ void GxsChannelPostItem::setup()
 	connect(ui->commentButton, SIGNAL(clicked()), this, SLOT(loadComments()));
 
 	connect(ui->playButton, SIGNAL(clicked()), this, SLOT(play(void)));
+	connect(ui->editButton, SIGNAL(clicked()), this, SLOT(edit(void)));
 	connect(ui->copyLinkButton, SIGNAL(clicked()), this, SLOT(copyMessageLink()));
 
 	connect(ui->readButton, SIGNAL(toggled(bool)), this, SLOT(readToggled(bool)));
@@ -166,6 +184,12 @@ bool GxsChannelPostItem::setGroup(const RsGxsChannelGroup &group, bool doFill)
 
 	mGroup = group;
 
+    // if not publisher, hide the edit button. Without the publish key, there's no way to edit a message.
+
+    std::cerr << "Group subscribe flags = " << std::hex << mGroup.mMeta.mSubscribeFlags << std::dec << std::endl;
+    if(!IS_GROUP_PUBLISHER(mGroup.mMeta.mSubscribeFlags))
+        ui->editButton->hide();
+
 	if (doFill) {
 		fill();
 	}
@@ -199,7 +223,9 @@ QString GxsChannelPostItem::getTitleLabel()
 
 QString GxsChannelPostItem::getMsgLabel()
 {
-	return RsHtml().formatText(NULL, QString::fromUtf8(mPost.mMsg.c_str()), RSHTML_FORMATTEXT_EMBED_SMILEYS | RSHTML_FORMATTEXT_EMBED_LINKS);
+	//return RsHtml().formatText(NULL, QString::fromUtf8(mPost.mMsg.c_str()), RSHTML_FORMATTEXT_EMBED_SMILEYS | RSHTML_FORMATTEXT_EMBED_LINKS);
+    // Disabled, because emoticon replacement kills performance.
+	return QString::fromUtf8(mPost.mMsg.c_str());
 }
 
 QString GxsChannelPostItem::groupName()
@@ -299,7 +325,7 @@ void GxsChannelPostItem::loadComment(const uint32_t &token)
 	if (comNb == 1) {
 		sComButText = sComButText.append("(1)");
 	} else if (comNb > 1) {
-		sComButText = tr("Comments").append("(%1)").arg(comNb);
+		sComButText = tr("Comments ").append("(%1)").arg(comNb);
 	}
 	ui->commentButton->setText(sComButText);
 }
@@ -359,9 +385,10 @@ void GxsChannelPostItem::fill()
 		/* subject */
 		ui->titleLabel->setText(QString::fromUtf8(mPost.mMeta.mMsgName.c_str()));
 
-		// fill first 4 lines of message
-		ui->subjectLabel->setText(RsHtml().formatText(NULL, RsStringUtil::CopyLines(QString::fromUtf8(mPost.mMsg.c_str()), 4), RSHTML_FORMATTEXT_EMBED_SMILEYS | RSHTML_FORMATTEXT_EMBED_LINKS));
-		
+		// fill first 4 lines of message. (csoler) Disabled the replacement of smileys and links, because the cost is too crazy
+		//ui->subjectLabel->setText(RsHtml().formatText(NULL, RsStringUtil::CopyLines(QString::fromUtf8(mPost.mMsg.c_str()), 4), RSHTML_FORMATTEXT_EMBED_SMILEYS | RSHTML_FORMATTEXT_EMBED_LINKS));
+		ui->subjectLabel->setText(RsStringUtil::CopyLines(QString::fromUtf8(mPost.mMsg.c_str()), 4)) ;
+
 		//QString score = QString::number(post.mTopScore);
 		// scoreLabel->setText(score); 
 
@@ -685,6 +712,12 @@ void GxsChannelPostItem::download()
 	}
 
 	updateItem();
+}
+
+void GxsChannelPostItem::edit()
+{
+	CreateGxsChannelMsg *msgDialog = new CreateGxsChannelMsg(mGroup.mMeta.mGroupId,mPost.mMeta.mMsgId);
+    msgDialog->show();
 }
 
 void GxsChannelPostItem::play()

@@ -5,6 +5,7 @@
 
 #include <retroshare/rspeers.h>
 #include <retroshare/rsidentity.h>
+#include <retroshare/rshistory.h>
 
 #include <algorithm>
 #include <limits>
@@ -144,8 +145,10 @@ ChatHandler::ChatHandler(StateTokenServer *sts, RsNotify *notify, RsMsgs *msgs, 
 
     addResourceHandler("*", this, &ChatHandler::handleWildcard);
     addResourceHandler("lobbies", this, &ChatHandler::handleLobbies);
+	addResourceHandler("create_lobby", this, &ChatHandler::handleCreateLobby);
     addResourceHandler("subscribe_lobby", this, &ChatHandler::handleSubscribeLobby);
     addResourceHandler("unsubscribe_lobby", this, &ChatHandler::handleUnsubscribeLobby);
+	addResourceHandler("autosubscribe_lobby", this, &ChatHandler::handleAutoSubsribeLobby);
     addResourceHandler("clear_lobby", this, &ChatHandler::handleClearLobby);
     addResourceHandler("lobby_participants", this, &ChatHandler::handleLobbyParticipants);
     addResourceHandler("messages", this, &ChatHandler::handleMessages);
@@ -155,6 +158,9 @@ ChatHandler::ChatHandler(StateTokenServer *sts, RsNotify *notify, RsMsgs *msgs, 
     addResourceHandler("receive_status", this, &ChatHandler::handleReceiveStatus);
     addResourceHandler("send_status", this, &ChatHandler::handleSendStatus);
     addResourceHandler("unread_msgs", this, &ChatHandler::handleUnreadMsgs);
+	addResourceHandler("initiate_distant_chat", this, &ChatHandler::handleInitiateDistantChatConnexion);
+	addResourceHandler("distant_chat_status", this, &ChatHandler::handleDistantChatStatus);
+	addResourceHandler("close_distant_chat", this, &ChatHandler::handleCloseDistantChatConnexion);
 }
 
 ChatHandler::~ChatHandler()
@@ -834,6 +840,7 @@ void ChatHandler::handleLobbies(Request &/*req*/, Response &resp)
 {
     tick();
 
+	{
     RS_STACK_MUTEX(mMtx); /********** LOCKED **********/
     resp.mDataStream.getStreamToMember();
     for(std::vector<Lobby>::iterator vit = mLobbies.begin(); vit != mLobbies.end(); ++vit)
@@ -851,6 +858,7 @@ void ChatHandler::handleLobbies(Request &/*req*/, Response &resp)
         resp.mDataStream.getStreamToMember() << *vit << makeKeyValueReference("unread_msg_count", unread_msgs);
     }
     resp.mStateToken = mLobbiesStateToken;
+	}
     resp.setOk();
 }
 
@@ -882,6 +890,15 @@ void ChatHandler::handleUnsubscribeLobby(Request &req, Response &resp)
     req.mStream << makeKeyValueReference("id", id);
     mRsMsgs->unsubscribeChatLobby(id);
     resp.setOk();
+}
+
+void ChatHandler::handleAutoSubsribeLobby(Request& req, Response& resp)
+{
+	ChatLobbyId chatId = 0;
+	bool autosubsribe;
+	req.mStream << makeKeyValueReference("chatid", chatId) << makeKeyValueReference("autosubsribe", autosubsribe);
+	mRsMsgs->setLobbyAutoSubscribe(chatId, autosubsribe);
+	resp.setOk();
 }
 
 void ChatHandler::handleClearLobby(Request &req, Response &resp)
@@ -918,24 +935,34 @@ ResponseTask* ChatHandler::handleLobbyParticipants(Request &req, Response &resp)
 
 void ChatHandler::handleMessages(Request &req, Response &resp)
 {
+	/* G10h4ck: Whithout this the request processing won't happen, copied from
+	 * ChatHandler::handleLobbies, is this a work around or is the right whay of
+	 * doing it? */
+	tick();
+
+	{
     RS_STACK_MUTEX(mMtx); /********** LOCKED **********/
-    ChatId id(req.mPath.top());
+	ChatId id(req.mPath.top());
+
     // make response a list
     resp.mDataStream.getStreamToMember();
     if(id.isNotSet())
     {
-        resp.setFail("\""+req.mPath.top()+"\" is not a valid chat id");
-        return;
+		resp.setFail("\""+req.mPath.top()+"\" is not a valid chat id");
+		return;
     }
     std::map<ChatId, std::list<Msg> >::iterator mit = mMsgs.find(id);
-    if(mit == mMsgs.end())
-    {
-        resp.mStateToken = mMsgStateToken; // even set state token, if not found yet, maybe later messages arrive and then the chat id will be found
-        resp.setFail("chat with id=\""+req.mPath.top()+"\" not found");
-        return;
-    }
+	if(mit == mMsgs.end())
+	{
+		/* set state token, even if not found yet, maybe later messages arrive
+		 * and then the chat id will be found */
+		resp.mStateToken = mMsgStateToken;
+		resp.setFail("chat with id=\""+req.mPath.top()+"\" not found");
+		return;
+	}
     resp.mStateToken = mMsgStateToken;
     handlePaginationRequest(req, resp, mit->second);
+	}
 }
 
 void ChatHandler::handleSendMessage(Request &req, Response &resp)
@@ -954,16 +981,16 @@ void ChatHandler::handleSendMessage(Request &req, Response &resp)
         resp.setOk();
     else
         resp.setFail("failed to send message");
-
 }
 
 void ChatHandler::handleMarkChatAsRead(Request &req, Response &resp)
 {
     RS_STACK_MUTEX(mMtx); /********** LOCKED **********/
-    ChatId id(req.mPath.top());
+	ChatId id(req.mPath.top());
+
     if(id.isNotSet())
     {
-        resp.setFail("\""+req.mPath.top()+"\" is not a valid chat id");
+		resp.setFail("\""+req.mPath.top()+"\" is not a valid chat id");
         return;
     }
     std::map<ChatId, std::list<Msg> >::iterator mit = mMsgs.find(id);
@@ -1123,6 +1150,98 @@ void ChatHandler::handleUnreadMsgs(Request &/*req*/, Response &resp)
         }
     }
     resp.mStateToken = mUnreadMsgsStateToken;
+}
+
+void ChatHandler::handleInitiateDistantChatConnexion(Request& req, Response& resp)
+{
+	std::string own_gxs_hex, remote_gxs_hex;
+
+	req.mStream << makeKeyValueReference("own_gxs_hex", own_gxs_hex)
+	            << makeKeyValueReference("remote_gxs_hex", remote_gxs_hex);
+
+	RsGxsId sender_id(own_gxs_hex);
+	if(sender_id.isNull())
+	{
+		resp.setFail("own_gxs_hex is invalid");
+		return;
+	}
+
+	RsGxsId receiver_id(remote_gxs_hex);
+	if(receiver_id.isNull())
+	{
+		resp.setFail("remote_gxs_hex is invalid");
+		return;
+	}
+
+	DistantChatPeerId distant_chat_id;
+	uint32_t error_code;
+
+	if(mRsMsgs->initiateDistantChatConnexion(receiver_id, sender_id, distant_chat_id, error_code))
+		resp.setOk();
+	else resp.setFail("Failed to initiate distant chat");
+
+	ChatId chat_id(distant_chat_id);
+	resp.mDataStream << makeKeyValue("chat_id", chat_id.toStdString())
+	                 << makeKeyValueReference("error_code", error_code);
+}
+
+void ChatHandler::handleDistantChatStatus(Request& req, Response& resp)
+{
+	std::string distant_chat_hex;
+	req.mStream << makeKeyValueReference("chat_id", distant_chat_hex);
+
+	ChatId id(distant_chat_hex);
+	DistantChatPeerInfo info;
+	if(mRsMsgs->getDistantChatStatus(id.toDistantChatId(), info)) resp.setOk();
+	else resp.setFail("Failed to get status for distant chat");
+
+	resp.mDataStream << makeKeyValue("own_gxs_hex", info.own_id.toStdString())
+	                 << makeKeyValue("remote_gxs_hex", info.to_id.toStdString())
+	                 << makeKeyValue("chat_id", info.peer_id.toStdString())
+	                 << makeKeyValue("status", info.status);
+}
+
+void ChatHandler::handleCloseDistantChatConnexion(Request& req, Response& resp)
+{
+	std::string distant_chat_hex;
+	req.mStream << makeKeyValueReference("distant_chat_hex", distant_chat_hex);
+
+	DistantChatPeerId chat_id(distant_chat_hex);
+	if (mRsMsgs->closeDistantChatConnexion(chat_id)) resp.setOk();
+	else resp.setFail("Failed to close distant chat");
+}
+
+void ChatHandler::handleCreateLobby(Request& req, Response& resp)
+{
+	std::set<RsPeerId> invited_identites;
+	std::string lobby_name;
+	std::string lobby_topic;
+	std::string gxs_id;
+
+	req.mStream << makeKeyValueReference("lobby_name", lobby_name);
+	req.mStream << makeKeyValueReference("lobby_topic", lobby_topic);
+	req.mStream << makeKeyValueReference("gxs_id", gxs_id);
+
+	RsGxsId gxsId(gxs_id);
+
+	bool lobby_public;
+	bool pgp_signed;
+
+	req.mStream << makeKeyValueReference("lobby_public", lobby_public);
+	req.mStream << makeKeyValueReference("pgp_signed", pgp_signed);
+
+	ChatLobbyFlags lobby_flags;
+
+	if(lobby_public)
+		lobby_flags |= RS_CHAT_LOBBY_FLAGS_PUBLIC;
+
+	if(pgp_signed)
+		lobby_flags |= RS_CHAT_LOBBY_FLAGS_PGP_SIGNED;
+
+	mRsMsgs->createChatLobby(lobby_name, gxsId, lobby_topic, invited_identites, lobby_flags);
+
+	tick();
+	resp.setOk();
 }
 
 } // namespace resource_api
