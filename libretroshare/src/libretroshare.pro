@@ -47,6 +47,7 @@ file_lists {
 			file_sharing/directory_updater.h \
 			file_sharing/rsfilelistitems.h \
 			file_sharing/dir_hierarchy.h \
+			file_sharing/file_tree.h \
 			file_sharing/file_sharing_defaults.h
 
 	SOURCES *= file_sharing/p3filelists.cc \
@@ -55,6 +56,7 @@ file_lists {
 			file_sharing/directory_storage.cc \
 			file_sharing/directory_updater.cc \
 			file_sharing/dir_hierarchy.cc \
+			file_sharing/file_tree.cc \
 			file_sharing/rsfilelistitems.cc
 }
 
@@ -195,7 +197,7 @@ linux-* {
 	LIBS *= -lpthread -ldl
 }
 
-unix {
+linux-* {
 	DEFINES *= PLUGIN_DIR=\"\\\"$${PLUGIN_DIR}\\\"\"
 	DEFINES *= DATA_DIR=\"\\\"$${DATA_DIR}\\\"\"
 
@@ -321,6 +323,9 @@ mac {
 		# We need a explicit path here, to force using the home version of sqlite3 that really encrypts the database.
 		LIBS += /usr/local/lib/libsqlcipher.a
 		#LIBS += -lsqlite3
+
+		DEFINES *= PLUGIN_DIR=\"\\\"$${PLUGIN_DIR}\\\"\"
+		DEFINES *= DATA_DIR=\"\\\"$${DATA_DIR}\\\"\"
 }
 
 ################################# FreeBSD ##########################################
@@ -913,7 +918,7 @@ test_bitdht {
 ################################# Android #####################################
 
 android-g++ {
-## ifaddrs is missing on Android add them don't use the one from
+## ifaddrs is missing on Android to add them don't use the one from
 ## https://github.com/morristech/android-ifaddrs
 ## because they crash, use QNetworkInterface from Qt instead
     CONFIG *= qt
@@ -922,15 +927,15 @@ android-g++ {
 ## Add this here and not in retroshare.pri because static library are very
 ## sensible to order in command line, has to be in the end of file for the
 ## same reason
-    LIBS += -L$$NDK_TOOLCHAIN_PATH/sysroot/usr/lib/ -lssl
-    INCLUDEPATH += $$NDK_TOOLCHAIN_PATH/sysroot/usr/include
-    DEPENDPATH += $$NDK_TOOLCHAIN_PATH/sysroot/usr/include
-    PRE_TARGETDEPS += $$NDK_TOOLCHAIN_PATH/sysroot/usr/lib/libssl.a
+    LIBS += -L$$NATIVE_LIBS_TOOLCHAIN_PATH/sysroot/usr/lib/ -lssl
+    INCLUDEPATH += $$NATIVE_LIBS_TOOLCHAIN_PATH/sysroot/usr/include
+    DEPENDPATH += $$NATIVE_LIBS_TOOLCHAIN_PATH/sysroot/usr/include
+    PRE_TARGETDEPS += $$NATIVE_LIBS_TOOLCHAIN_PATH/sysroot/usr/lib/libssl.a
 
-    LIBS += -L$$NDK_TOOLCHAIN_PATH/sysroot/usr/lib/ -lcrypto
-    INCLUDEPATH += $$NDK_TOOLCHAIN_PATH/sysroot/usr/include
-    DEPENDPATH += $$NDK_TOOLCHAIN_PATH/sysroot/usr/include
-    PRE_TARGETDEPS += $$NDK_TOOLCHAIN_PATH/sysroot/usr/lib/libcrypto.a
+    LIBS += -L$$NATIVE_LIBS_TOOLCHAIN_PATH/sysroot/usr/lib/ -lcrypto
+    INCLUDEPATH += $$NATIVE_LIBS_TOOLCHAIN_PATH/sysroot/usr/include
+    DEPENDPATH += $$NATIVE_LIBS_TOOLCHAIN_PATH/sysroot/usr/include
+    PRE_TARGETDEPS += $$NATIVE_LIBS_TOOLCHAIN_PATH/sysroot/usr/lib/libcrypto.a
 
     HEADERS += util/androiddebug.h
 }

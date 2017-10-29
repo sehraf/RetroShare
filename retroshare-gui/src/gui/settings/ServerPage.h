@@ -87,7 +87,6 @@ private slots:
     // server
     void saveAddresses();
     void saveRates();
-	void updateShowDiscStatusBar() ;
     void toggleUPnP();
     void toggleIpDetermination(bool) ;
     void toggleTunnelConnection(bool) ;
@@ -113,6 +112,16 @@ private slots:
 	void syncI2PProxyAddrBob(QString);
 
 	void connectionWithoutCert();
+
+	//Relay Tab
+	void updateRelayOptions();
+	void updateEnabled();
+	void checkKey();
+	void addServer();
+	void removeServer();
+	void loadServers();
+	void updateTotals();
+	void updateRelayMode();
 
 	// autoProxyCallback interface
 public:

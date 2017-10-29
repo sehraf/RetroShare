@@ -43,7 +43,7 @@
 #include "msgs/MessageComposer.h"
 #include "util/misc.h"
 #include "common/PeerDefs.h"
-#include "common/RsCollectionFile.h"
+#include "common/RsCollection.h"
 #include <gui/common/RsUrlHandler.h>
 #include "gui/connect/ConnectFriendWizard.h"
 #include "gui/connect/ConfCertDialog.h"
@@ -58,6 +58,7 @@
 //#define DEBUG_RSLINK 1
 
 #define HOST_FILE        "file"
+#define HOST_COLLECTION  "collection"
 #define HOST_EXTRAFILE   "extra"
 #define HOST_PERSON      "person"
 #define HOST_FORUM       "forum"
@@ -68,12 +69,17 @@
 #define HOST_CERTIFICATE "certificate"
 #define HOST_PUBLIC_MSG  "public_msg"
 #define HOST_IDENTITY    "identity"
-#define HOST_REGEXP      "file|extra|person|forum|channel|posted|search|message|certificate|private_chat|public_msg|identity"
+#define HOST_REGEXP      "file|collection|extra|person|forum|channel|posted|search|message|certificate|private_chat|public_msg|identity"
 
 #define FILE_NAME       "name"
 #define FILE_SIZE       "size"
 #define FILE_HASH       "hash"
 #define FILE_SOURCE     "src"
+
+#define COLLECTION_NAME "name"
+#define COLLECTION_SIZE "size"
+#define COLLECTION_DATA "radix"
+#define COLLECTION_COUNT "files"
 
 #define PERSON_NAME     "name"
 #define PERSON_HASH     "hash"
@@ -316,19 +322,32 @@ void RetroShareLink::fromUrl(const QUrl& url)
         RsGxsId id(gxsid.toStdString()) ;
 
         if(!id.isNull())
-			createIdentity(id,name,radix) ;
+            *this = createIdentity(id,name,radix) ;
         else
             std::cerr << "(EE) identity link is not valid." << std::endl;
         return ;
     }
 
 	if (url.host() == HOST_MESSAGE) {
-		_type = TYPE_MESSAGE;
 		std::string id = urlQuery.queryItemValue(MESSAGE_ID).toStdString();
-		createMessage(RsPeerId(id), urlQuery.queryItemValue(MESSAGE_SUBJECT));
+		*this = createMessage(RsPeerId(id), urlQuery.queryItemValue(MESSAGE_SUBJECT));
 		return;
 	}
 
+	if (url.host() == HOST_COLLECTION) {
+		bool ok;
+		_type  = TYPE_FILE_TREE;
+		_radix = decodedQueryItemValue(urlQuery, COLLECTION_DATA);
+		_name  = decodedQueryItemValue(urlQuery, COLLECTION_NAME);
+		_size  = urlQuery.queryItemValue(COLLECTION_SIZE).toULongLong(&ok);
+		_count = urlQuery.queryItemValue(COLLECTION_COUNT).toULongLong(&ok);
+
+#ifdef DEBUG_RSLINK
+        std::cerr << "Got a certificate link!!" << std::endl;
+#endif
+		check() ;
+		return;
+	}
 	if (url.host() == HOST_CERTIFICATE) {
 		_type = TYPE_CERTIFICATE;
 		_radix = decodedQueryItemValue(urlQuery, CERTIFICATE_RADIX);
@@ -352,211 +371,250 @@ RetroShareLink::RetroShareLink()
 	clear();
 }
 
-bool RetroShareLink::createIdentity(const RsGxsId& id, const QString& name, const QString& radix_data)
+RetroShareLink RetroShareLink::createIdentity(const RsGxsId& id, const QString& name, const QString& radix_data)
 {
-	clear();
+	RetroShareLink link;
+	link.clear();
 
-	_name = name;
-	_hash = QString::fromStdString(id.toStdString());
-    _radix_group_data = radix_data ;
+	link._name = name;
+	link._hash = QString::fromStdString(id.toStdString());
+	link._radix_group_data = radix_data ;
 
-	_type = TYPE_IDENTITY;
+	link._type = TYPE_IDENTITY;
 
-	check();
+	link.check();
 
-	return valid();
+	return link;
 }
 
-bool RetroShareLink::createExtraFile(const QString& name, uint64_t size, const QString& hash,const QString& ssl_id)
+RetroShareLink RetroShareLink::createExtraFile(const QString& name, uint64_t size, const QString& hash,const QString& ssl_id)
 {
-	clear();
+	RetroShareLink link;
+	link.clear();
 
-	_name = name;
-	_size = size;
-	_hash = hash;
-	_SSLid = ssl_id;
+	link._name = name;
+	link._size = size;
+	link._hash = hash;
+	link._SSLid = ssl_id;
 
-	_type = TYPE_EXTRAFILE;
+	link._type = TYPE_EXTRAFILE;
 
-	check();
+	link.check();
 
-	return valid();
-}
-bool RetroShareLink::createFile(const QString& name, uint64_t size, const QString& hash)
-{
-	clear();
-
-	_name = name;
-	_size = size;
-	_hash = hash;
-
-	_type = TYPE_FILE;
-
-	check();
-
-	return valid();
+	return link;
 }
 
-bool RetroShareLink::createPublicMsgInvite(time_t time_stamp,const QString& issuer_pgp_id,const QString& hash) 
+RetroShareLink RetroShareLink::createFile(const QString& name, uint64_t size, const QString& hash)
 {
-	clear() ;
+	RetroShareLink link;
+	link.clear();
 
-	_type = TYPE_PUBLIC_MSG ;
-	_time_stamp = time_stamp ;
-	_hash = hash ;
-	_GPGid = issuer_pgp_id ;
+	link._name = name;
+	link._size = size;
+	link._hash = hash;
 
-	check() ;
+	link._type = TYPE_FILE;
 
-	return valid() ;
+	link.check();
+
+	return link;
 }
 
-bool RetroShareLink::createPerson(const RsPgpId& id)
+RetroShareLink RetroShareLink::createCollection(const QString& name, uint64_t size, uint32_t count, const QString& radix_data)
 {
-	clear();
+	RetroShareLink link;
+	link.clear();
+
+	link._name  = name;
+	link._count = count;
+	link._size  = size;
+	link._radix = radix_data ;
+	link._type = TYPE_FILE_TREE;
+
+	link.check();
+
+	return link;
+}
+RetroShareLink RetroShareLink::createPublicMsgInvite(time_t time_stamp,const QString& issuer_pgp_id,const QString& hash)
+{
+	RetroShareLink link;
+	link.clear() ;
+
+	link._type = TYPE_PUBLIC_MSG ;
+	link._time_stamp = time_stamp ;
+	link._hash = hash ;
+	link._GPGid = issuer_pgp_id ;
+
+	link.check() ;
+
+	return link;
+}
+
+RetroShareLink RetroShareLink::createPerson(const RsPgpId& id)
+{
+	RetroShareLink link;
+	link.clear();
 
 	RsPeerDetails detail;
 	if (rsPeers->getGPGDetails(id, detail) == false) {
 		std::cerr << "RetroShareLink::createPerson() Couldn't find peer id " << id << std::endl;
-		return false;
+	} else {
+
+		link._hash = QString::fromStdString(id.toStdString());
+		link._name = QString::fromUtf8(detail.name.c_str());
+
+		link._type = TYPE_PERSON;
 	}
 
-	_hash = QString::fromStdString(id.toStdString());
-	_name = QString::fromUtf8(detail.name.c_str());
+	link.check();
 
-	_type = TYPE_PERSON;
-
-	check();
-
-	return valid();
+	return link;
 }
 
-bool RetroShareLink::createCertificate(const RsPeerId& ssl_id)
+RetroShareLink RetroShareLink::createCertificate(const RsPeerId& ssl_id)
 {
-	// This is baaaaaad code:
+	RetroShareLink link;
+	link.clear();
+
+#warning csoler 2012-08-14: This is baaaaaad code:
 	// 	- we should not need to parse and re-read a cert in old format.
 	//
 	RsPeerDetails detail;
 	if (rsPeers->getPeerDetails(ssl_id, detail) == false) {
 		std::cerr << "RetroShareLink::createPerson() Couldn't find peer id " << ssl_id << std::endl;
-		return false;
+	} else {
+
+		link._type = TYPE_CERTIFICATE;
+		link._radix = QString::fromUtf8(rsPeers->GetRetroshareInvite(ssl_id,false).c_str());
+		link._name = QString::fromUtf8(detail.name.c_str());
+		link._location = QString::fromUtf8(detail.location.c_str());
+		link._radix.replace("\n","");
+
+		std::cerr << "Found radix                = " << link._radix.toStdString() << std::endl;
 	}
 
-	_type = TYPE_CERTIFICATE;
-	_radix = QString::fromUtf8(rsPeers->GetRetroshareInvite(ssl_id,false).c_str());
-	_name = QString::fromUtf8(detail.name.c_str());
-	_location = QString::fromUtf8(detail.location.c_str());
-	_radix.replace("\n","");
+	link.check();
 
-	std::cerr << "Found radix                = " << _radix.toStdString() << std::endl;
-
-	return true;
+	return link;
 }
 
-bool RetroShareLink::createUnknwonSslCertificate(const RsPeerId& sslId, const RsPgpId& gpgId)
+RetroShareLink RetroShareLink::createUnknwonSslCertificate(const RsPeerId& sslId, const RsPgpId& gpgId)
 {
+	RetroShareLink link;
+	link.clear();
+
 	// first try ssl id
-	if (createCertificate(sslId)) {
-		if (gpgId.isNull() || _GPGid.toStdString() == gpgId.toStdString()) {
-			return true;
+	link = createCertificate(sslId);
+	if (link.valid()) {
+		if (gpgId.isNull() || link._GPGid.toStdString() == gpgId.toStdString()) {
+			return link;
 		}
 		// wrong gpg id
-		return false;
+		link.clear();
+		return link;
 	}
 
 	// then gpg id
-	if (createPerson(gpgId)) {
-		if (!_SSLid.isEmpty()) {
-			return false;
+	link = createPerson(gpgId);
+	if (link.valid()) {
+		if (!link._SSLid.isEmpty()) {
+			link.clear();
+			return link;
 		}
 		if (sslId.isNull()) {
-			return true;
+			link.check();
+			return link;
 		}
-		_SSLid = QString::fromStdString(sslId.toStdString());
-		if (_location.isEmpty()) {
-			_location = _name;
+		link._SSLid = QString::fromStdString(sslId.toStdString());
+		if (link._location.isEmpty()) {
+			link._location = link._name;
 		}
-		return true;
+		link.check();
+		return link;
 	}
 
-	return false;
+	link.clear();
+	return link;
 }
 
-bool RetroShareLink::createGxsGroupLink(const RetroShareLink::enumType &linkType, const RsGxsGroupId &groupId, const QString &groupName)
+RetroShareLink RetroShareLink::createGxsGroupLink(const RetroShareLink::enumType &linkType, const RsGxsGroupId &groupId, const QString &groupName)
 {
-	clear();
+	RetroShareLink link;
+	link.clear();
 
 	if (!groupId.isNull()) {
-		_hash = QString::fromStdString(groupId.toStdString());
-		_type = linkType;
-		_name = groupName;
+		link._hash = QString::fromStdString(groupId.toStdString());
+		link._type = linkType;
+		link._name = groupName;
 	}
 
-	check();
+	link.check();
 
-	return valid();
+	return link;
 }
 
-bool RetroShareLink::createGxsMessageLink(const RetroShareLink::enumType &linkType, const RsGxsGroupId &groupId, const RsGxsMessageId &msgId, const QString &msgName)
+RetroShareLink RetroShareLink::createGxsMessageLink(const RetroShareLink::enumType &linkType, const RsGxsGroupId &groupId, const RsGxsMessageId &msgId, const QString &msgName)
 {
-	clear();
+	RetroShareLink link;
+	link.clear();
 
 	if (!groupId.isNull() && !msgId.isNull()) {
-		_hash = QString::fromStdString(groupId.toStdString());
-		_msgId = QString::fromStdString(msgId.toStdString());
-		_type = linkType;
-		_name = msgName;
+		link._hash = QString::fromStdString(groupId.toStdString());
+		link._msgId = QString::fromStdString(msgId.toStdString());
+		link._type = linkType;
+		link._name = msgName;
 	}
 
-	check();
+	link.check();
 
-	return valid();
+	return link;
 }
 
-bool RetroShareLink::createSearch(const QString& keywords)
+RetroShareLink RetroShareLink::createSearch(const QString& keywords)
 {
-	clear();
+	RetroShareLink link;
+	link.clear();
 
-	_name = keywords;
+	link._name = keywords;
 
-	_type = TYPE_SEARCH;
+	link._type = TYPE_SEARCH;
 
-	check();
+	link.check();
 
-	return valid();
+	return link;
 }
 
-bool RetroShareLink::createMessage(const RsPeerId& peerId, const QString& subject)
+RetroShareLink RetroShareLink::createMessage(const RsPeerId& peerId, const QString& subject)
 {
-	clear();
+	RetroShareLink link;
+	link.clear();
 
-	_hash = QString::fromStdString(peerId.toStdString());
-	PeerDefs::rsidFromId(peerId, &_name);
-	_subject = subject;
+	link._hash = QString::fromStdString(peerId.toStdString());
+	PeerDefs::rsidFromId(peerId, &link._name);
+	link._subject = subject;
 
-	_type = TYPE_MESSAGE;
+	link._type = TYPE_MESSAGE;
 
-	check();
+	link.check();
 
-	return valid();
+	return link;
 }
-bool RetroShareLink::createMessage(const RsGxsId& peerId, const QString& subject)
+RetroShareLink RetroShareLink::createMessage(const RsGxsId& peerId, const QString& subject)
 {
-	clear();
+	RetroShareLink link;
+	link.clear();
 
-	_hash = QString::fromStdString(peerId.toStdString());
+	link._hash = QString::fromStdString(peerId.toStdString());
+	PeerDefs::rsidFromId(peerId, &link._name);
+	link._subject = subject;
 
-	PeerDefs::rsidFromId(peerId, &_name);
-	//_name = QString::fromStdString("GXS_id("+peerId.toStdString()+")") ;
-	// do something better here!!
-	_subject = subject;
+	link._type = TYPE_MESSAGE;
 
-	_type = TYPE_MESSAGE;
+	link.check();
 
-	check();
-
-	return valid();
+	return link;
 }
+
 void RetroShareLink::clear()
 {
 	_valid = false;
@@ -584,6 +642,9 @@ void RetroShareLink::check()
 		case TYPE_EXTRAFILE:
 			if(!checkSSLId(_SSLid))
 				_valid = false;			// no break! We also test file stuff below.
+			/* fallthrough */
+		case TYPE_FILE_TREE:
+
 		case TYPE_FILE:
 			if(_size > (((uint64_t)1)<<40))	// 1TB. Who has such large files?
 				_valid = false;
@@ -591,7 +652,7 @@ void RetroShareLink::check()
 			if(!checkName(_name))
 				_valid = false;
 
-			if(!checkHash(_hash))
+			if(!checkRadix64(_radix))
 				_valid = false;
 			break;
 
@@ -693,6 +754,8 @@ QString RetroShareLink::title() const
 				rsPeers->getGPGDetails(RsPgpId(_GPGid.toStdString()), detail) ;
 				return QObject::tr("Click to send a private message to %1 (%2).").arg(QString::fromUtf8(detail.name.c_str())).arg(_GPGid) ;
 			}
+		case TYPE_FILE_TREE:
+			return QObject::tr("Click to browse/download this file collection");
 		case TYPE_EXTRAFILE:
 			return QObject::tr("%1 (%2, Extra - Source included)").arg(hash()).arg(misc::friendlyUnit(size()));
 		case TYPE_FILE:
@@ -836,6 +899,15 @@ QString RetroShareLink::toString() const
 
 			break;
 
+		case TYPE_FILE_TREE:
+			url.setScheme(RSLINK_SCHEME);
+			url.setHost(HOST_COLLECTION) ;
+			urlQuery.addQueryItem(COLLECTION_NAME, encodeItem(_name));
+			urlQuery.addQueryItem(COLLECTION_SIZE, QString::number(_size));
+			urlQuery.addQueryItem(COLLECTION_DATA, encodeItem(_radix));
+			urlQuery.addQueryItem(COLLECTION_COUNT, QString::number(_count));
+			break;
+
 		case TYPE_CERTIFICATE:
 			url.setScheme(RSLINK_SCHEME);
 			url.setHost(HOST_CERTIFICATE) ;
@@ -858,8 +930,14 @@ QString RetroShareLink::niceName() const
 	if (type() == TYPE_PERSON)
 		return PeerDefs::rsid(name().toUtf8().constData(), RsPgpId(hash().toStdString()));
 
+	if(type() == TYPE_FILE_TREE)
+		return QObject::tr("%1 (%2 files, %3)").arg(_name).arg(_count).arg(misc::friendlyUnit(_size));
+
 	if(type() == TYPE_IDENTITY)
 		return QObject::tr("Identity link (name=%1, ID=%2)").arg(_name).arg(_hash) ;
+
+	if(type() == TYPE_FILE_TREE)
+		return QObject::tr("File directory (Total %s) Click to browse/download this file collection").arg(misc::friendlyUnit(_size));
 
 	if(type() == TYPE_PUBLIC_MSG) {
 		RsPeerDetails detail;
@@ -902,10 +980,10 @@ QString RetroShareLink::toHtmlSize() const
 {
 	QString size = QString("(%1)").arg(misc::friendlyUnit(_size));
 
-	if (type() == TYPE_FILE && RsCollectionFile::isCollectionFile(name())) {
+	if (type() == TYPE_FILE && RsCollection::isCollectionFile(name())) {
 		FileInfo finfo;
 		if (rsFiles->FileDetails(RsFileHash(hash().toStdString()), RS_FILE_HINTS_EXTRA | RS_FILE_HINTS_LOCAL, finfo)) {
-			RsCollectionFile collection;
+			RsCollection collection;
 			if (collection.load(QString::fromUtf8(finfo.path.c_str()), false)) {
 				size += QString(" [%1]").arg(misc::friendlyUnit(collection.size()));
 			}
@@ -1071,6 +1149,7 @@ static void processList(const QStringList &list, const QString &textSingular, co
 				case TYPE_SEARCH:
 				case TYPE_MESSAGE:
 				case TYPE_IDENTITY:
+				case TYPE_FILE_TREE:
 				case TYPE_CERTIFICATE:
 				case TYPE_PUBLIC_MSG:
 				case TYPE_PRIVATE_CHAT:
@@ -1117,6 +1196,7 @@ static void processList(const QStringList &list, const QString &textSingular, co
 	int countUnknown = 0;
 	int countFileOpened = 0;
 	bool needNotifySuccess = false;
+	bool dontOpenNextFile = false;
 
 	// file
 	QStringList fileAdded;
@@ -1275,25 +1355,30 @@ static void processList(const QStringList &list, const QString &textSingular, co
 						/* make path for downloaded file */
 						std::string path;
 						path = fi.path;//Shared files has path with filename included
-						if (fi.downloadStatus == FT_STATE_COMPLETE)
-							path = fi.path + "/" + fi.fname;
+
+						//Seems that all FileInfo get .path==filepath+filename
+						//if (fi.downloadStatus == FT_STATE_COMPLETE)
+						//	path = fi.path + "/" + fi.fname;
 
 						QFileInfo qinfo;
 						qinfo.setFile(QString::fromUtf8(path.c_str()));
-						if (qinfo.exists() && qinfo.isFile()) {
+						if (qinfo.exists() && qinfo.isFile() && !dontOpenNextFile) {
 							QString question = "<html><body>";
 							question += QObject::tr("Warning: Retroshare is about to ask your system to open this file. ");
 							question += QObject::tr("Before you do so, please make sure that this file does not contain malicious executable code.");
 							question += "<br><br>" + cleanname + "</body></html>";
 
-							QMessageBox mb(QObject::tr("Confirmation"), question, QMessageBox::Warning, QMessageBox::Yes,QMessageBox::No, 0);
-							if (mb.exec() == QMessageBox::Yes) {
+							QMessageBox mb(QObject::tr("Confirmation"), question, QMessageBox::Warning, QMessageBox::Yes, QMessageBox::No, links.size()>1 ? QMessageBox::NoToAll : 0, 0);
+							int ret = mb.exec();
+							if(ret == QMessageBox::Yes) {
 								++countFileOpened;
 								bFileOpened = true;
 								/* open file with a suitable application */
 								if (!RsUrlHandler::openUrl(QUrl::fromLocalFile(qinfo.absoluteFilePath()))) {
 									std::cerr << "RetroShareLink::process(): can't open file " << path << std::endl;
 								}
+							} else if (ret == QMessageBox::NoToAll) {
+									dontOpenNextFile = true;
 							}
 						}
 					}
@@ -1306,6 +1391,16 @@ static void processList(const QStringList &list, const QString &textSingular, co
 				}
 			break;
 
+			case TYPE_FILE_TREE:
+				{
+					FileTree *ft = FileTree::create(link.radix().toStdString()) ;
+
+					RsCollection(*ft).downloadFiles() ;
+
+					delete ft;
+				}
+				break;
+
 			case TYPE_PERSON:
 				{
 #ifdef DEBUG_RSLINK
@@ -1317,34 +1412,6 @@ static void processList(const QStringList &list, const QString &textSingular, co
                         PGPKeyDialog::showIt(detail.gpg_id,PGPKeyDialog::PageDetails) ;
                     else
                         personNotFound.append(PeerDefs::rsid(link.name().toUtf8().constData(), RsPgpId(link.hash().toStdString())));
-
-//					needNotifySuccess = true;
-
-//					RsPeerDetails detail;
-//					if (rsPeers->getGPGDetails(RsPgpId(link.hash().toStdString()), detail))
-//					{
-//						if (RsPgpId(detail.gpg_id) == rsPeers->getGPGOwnId()) {
-//							// it's me, do nothing
-//							break;
-//						}
-//
-//						if (detail.accept_connection) {
-//							// peer connection is already accepted
-//							personExist.append(PeerDefs::rsid(detail));
-//							break;
-//						}
-//
-//						if (rsPeers->addFriend(RsPeerId(), RsPgpId(link.hash().toStdString()))) {
-//							ConfCertDialog::loadAll();
-//							personAdded.append(PeerDefs::rsid(detail));
-//							break;
-//						}
-//
-//						personFailed.append(PeerDefs::rsid(link.name().toUtf8().constData(), RsPgpId(link.hash().toStdString())));
-//						break;
-//					}
-//
-//					personNotFound.append(PeerDefs::rsid(link.name().toUtf8().constData(), RsPgpId(link.hash().toStdString())));
 				}
 			break;
 
@@ -1638,6 +1705,8 @@ static void processList(const QStringList &list, const QString &textSingular, co
 	return process(links, flag);
 }
 
+/**** RSLinkClipboard ********************************************/
+
 void RSLinkClipboard::copyLinks(const QList<RetroShareLink>& links)
 {
 	QString res ;
@@ -1647,17 +1716,17 @@ void RSLinkClipboard::copyLinks(const QList<RetroShareLink>& links)
 	QApplication::clipboard()->setText(res) ;
 }
 
-void RSLinkClipboard::pasteLinks(QList<RetroShareLink> &links)
+void RSLinkClipboard::pasteLinks(QList<RetroShareLink> &links,RetroShareLink::enumType type)
 {
-	return parseClipboard(links);
+	return parseClipboard(links,type);
 }
 
-void RSLinkClipboard::parseClipboard(QList<RetroShareLink> &links)
+void RSLinkClipboard::parseClipboard(QList<RetroShareLink> &links,RetroShareLink::enumType type)
 {
 	// parse clipboard for links.
 	//
 	QString text = QApplication::clipboard()->text() ;
-	parseText(text, links);
+	parseText(text, links,type);
 }
 
 QString RSLinkClipboard::toString()
@@ -1702,26 +1771,18 @@ bool RSLinkClipboard::empty(RetroShareLink::enumType type /* = RetroShareLink::T
 	return true;
 }
 
-/*static*/ int RSLinkClipboard::process(RetroShareLink::enumType type /* = RetroShareLink::TYPE_UNKNOWN*/, uint flag /* = RSLINK_PROCESS_NOTIFY_ALL*/)
+int RSLinkClipboard::process(RetroShareLink::enumType type /* = RetroShareLink::TYPE_UNKNOWN*/, uint flag /* = RSLINK_PROCESS_NOTIFY_ALL*/)
 {
 	QList<RetroShareLink> links;
-	pasteLinks(links);
+	pasteLinks(links,type);
 
-	QList<RetroShareLink> linksToProcess;
-	for (int i = 0; i < links.size(); ++i) {
-		if (links[i].valid() && (type == RetroShareLink::TYPE_UNKNOWN || links[i].type() == type)) {
-			linksToProcess.append(links[i]);
-		}
-	}
-
-	if (linksToProcess.isEmpty()) {
+	if (links.isEmpty())
 		return 0;
-	}
 
-	return RetroShareLink::process(linksToProcess, flag);
+	return RetroShareLink::process(links, flag);
 }
 
-void RSLinkClipboard::parseText(QString text, QList<RetroShareLink> &links)
+void RSLinkClipboard::parseText(QString text, QList<RetroShareLink> &links,RetroShareLink::enumType type )
 {
 	links.clear();
 
@@ -1736,7 +1797,7 @@ void RSLinkClipboard::parseText(QString text, QList<RetroShareLink> &links)
 		QString url(text.mid(pos, rx.matchedLength()));
 		RetroShareLink link(url);
 
-		if(link.valid())
+		if(link.valid() && (type == RetroShareLink::TYPE_UNKNOWN || type == link.type()))
 		{
 			// check that the link is not already in the list:
 			bool already = false ;

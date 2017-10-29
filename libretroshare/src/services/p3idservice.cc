@@ -425,7 +425,7 @@ public:
         bool no_ts = (it == mLastUsageTS.end()) ;
 
         time_t last_usage_ts = no_ts?0:(it->second.TS);
-        time_t max_keep_time ;
+        time_t max_keep_time = 0;
         bool should_check = true ;
 
         if(no_ts)
@@ -698,9 +698,10 @@ bool p3IdService::getOwnIds(std::list<RsGxsId> &ownIds)
     return true ;
 }
 
-bool p3IdService::serialiseIdentityToMemory(const RsGxsId& id,std::string& radix_string)
+bool p3IdService::serialiseIdentityToMemory( const RsGxsId& id,
+                                             std::string& radix_string )
 {
-    RsStackMutex stack(mIdMtx); /********** STACK LOCKED MTX ******/
+	RS_STACK_MUTEX(mIdMtx);
 
     // look into cache. If available, return the data. If not, request it.
 
@@ -758,23 +759,27 @@ void p3IdService::handle_get_serialized_grp(uint32_t token)
     mSerialisedIdentities[RsGxsId(id)] = s ;
 }
 
-bool p3IdService::deserialiseIdentityFromMemory(const std::string& radix_string)
+bool p3IdService::deserialiseIdentityFromMemory(const std::string& radix_string,
+                                                RsGxsId* id /* = nullptr */)
 {
-    std::vector<uint8_t> mem = Radix64::decode(radix_string) ;
+	std::vector<uint8_t> mem = Radix64::decode(radix_string);
 
-    if(mem.empty())
+	if(mem.empty())
 	{
-		std::cerr << "Cannot decode radix string \"" << radix_string << "\"" << std::endl;
-		return false ;
+		std::cerr << __PRETTY_FUNCTION__ << "Cannot decode radix string \""
+		          << radix_string << "\"" << std::endl;
+		return false;
 	}
 
-	if(!RsGenExchange::deserializeGroupData(mem.data(),mem.size()))
-    {
-		std::cerr << "Cannot load identity from radix string \"" << radix_string << "\"" << std::endl;
-        return false ;
-    }
+	if( !RsGenExchange::deserializeGroupData(
+	            mem.data(), mem.size(), reinterpret_cast<RsGxsGroupId*>(id)) )
+	{
+		std::cerr << __PRETTY_FUNCTION__ << "Cannot load identity from radix "
+		          << "string \"" << radix_string << "\"" << std::endl;
+		return false;
+	}
 
-    return true ;
+	return true;
 }
 
 bool p3IdService::createIdentity(uint32_t& token, RsIdentityParameters &params)
@@ -1202,13 +1207,17 @@ bool p3IdService::encryptData( const uint8_t* decrypted_data,
 	for( int i=0; i < maxRounds; ++i )
 	{
 		for( std::set<const RsGxsId*>::iterator it = keyNotYetFoundIds.begin();
-		     it !=keyNotYetFoundIds.end(); ++it )
+		     it !=keyNotYetFoundIds.end(); )
 		{
 			RsTlvPublicRSAKey encryption_key;
 			if(getKey(**it, encryption_key) && !encryption_key.keyId.isNull())
 			{
 				encryption_keys.push_back(encryption_key);
-				keyNotYetFoundIds.erase(it);
+				it = keyNotYetFoundIds.erase(it);
+			}
+			else
+			{
+				++it;
 			}
 		}
 
@@ -1331,14 +1340,18 @@ bool p3IdService::decryptData( const uint8_t* encrypted_data,
 	for( int i=0; i < maxRounds; ++i )
 	{
 		for( std::set<const RsGxsId*>::iterator it = keyNotYetFoundIds.begin();
-		     it !=keyNotYetFoundIds.end(); ++it )
+		     it !=keyNotYetFoundIds.end(); )
 		{
 			RsTlvPrivateRSAKey decryption_key;
 			if( getPrivateKey(**it, decryption_key)
 			        && !decryption_key.keyId.isNull() )
 			{
 				decryption_keys.push_back(decryption_key);
-				keyNotYetFoundIds.erase(it);
+				it = keyNotYetFoundIds.erase(it);
+			}
+			else
+			{
+				++it;
 			}
 		}
 
@@ -4392,32 +4405,31 @@ void p3IdService::handleResponse(uint32_t token, uint32_t req_type)
 	// stuff.
 	switch(req_type)
 	{
-		case GXSIDREQ_CACHEOWNIDS:
-			cache_load_ownids(token);
-			break;
-		case GXSIDREQ_CACHELOAD:
-			cache_load_for_token(token);
-			break;
-		case GXSIDREQ_PGPHASH:
-			pgphash_handlerequest(token);
-			break;
-		case GXSIDREQ_RECOGN:
-			recogn_handlerequest(token);
-			break;
-		case GXSIDREQ_CACHETEST:
-			cachetest_handlerequest(token);
-			break;
-		case GXSIDREQ_OPINION:
-			opinion_handlerequest(token);
-			break;
-		case GXSIDREQ_SERIALIZE_TO_MEMORY:
-        	handle_get_serialized_grp(token) ;
-
-		default:
-			/* error */
-			std::cerr << "p3IdService::handleResponse() Unknown Request Type: " << req_type;
-			std::cerr << std::endl;
-			break;
+	case GXSIDREQ_CACHEOWNIDS:
+		cache_load_ownids(token);
+		break;
+	case GXSIDREQ_CACHELOAD:
+		cache_load_for_token(token);
+		break;
+	case GXSIDREQ_PGPHASH:
+		pgphash_handlerequest(token);
+		break;
+	case GXSIDREQ_RECOGN:
+		recogn_handlerequest(token);
+		break;
+	case GXSIDREQ_CACHETEST:
+		cachetest_handlerequest(token);
+		break;
+	case GXSIDREQ_OPINION:
+		opinion_handlerequest(token);
+		break;
+	case GXSIDREQ_SERIALIZE_TO_MEMORY:
+		handle_get_serialized_grp(token);
+		break;
+	default:
+		std::cerr << "p3IdService::handleResponse() Unknown Request Type: "
+		          << req_type << std::endl;
+		break;
 	}
 }
 
