@@ -816,18 +816,19 @@ rs_gxs_trans {
 rs_jsonapi {
     JSONAPI_GENERATOR_SRC=$$clean_path($${RS_SRC_PATH}/jsonapi-generator/src/)
     JSONAPI_GENERATOR_OUT=$$clean_path($${RS_BUILD_PATH}/jsonapi-generator/src/)
-    isEmpty(JSONAPI_GENERATOR_EXE) {
-        win32 {
-            CONFIG(release, debug|release) {
-                JSONAPI_GENERATOR_EXE=$$clean_path($${JSONAPI_GENERATOR_OUT}/release/jsonapi-generator.exe)
-            }
-        CONFIG(debug, debug|release) {
-                JSONAPI_GENERATOR_EXE=$$clean_path($${JSONAPI_GENERATOR_OUT}/debug/jsonapi-generator.exe)
-            }
-        } else {
-            JSONAPI_GENERATOR_EXE=$$clean_path($${JSONAPI_GENERATOR_OUT}/jsonapi-generator)
-        }
-    }
+#    isEmpty(JSONAPI_GENERATOR_EXE) {
+#        win32 {
+#            CONFIG(release, debug|release) {
+#                JSONAPI_GENERATOR_EXE=$$clean_path($${JSONAPI_GENERATOR_OUT}/release/jsonapi-generator.exe)
+#            }
+#        CONFIG(debug, debug|release) {
+#                JSONAPI_GENERATOR_EXE=$$clean_path($${JSONAPI_GENERATOR_OUT}/debug/jsonapi-generator.exe)
+#            }
+#        } else {
+#            JSONAPI_GENERATOR_EXE=$$clean_path($${JSONAPI_GENERATOR_OUT}/jsonapi-generator)
+#        }
+#    }
+    JSONAPI_GENERATOR_EXE=$$clean_path($${JSONAPI_GENERATOR_SRC}/jsonapi-generator.py)
 
     DOXIGEN_INPUT_DIRECTORY=$$clean_path($${PWD})
     DOXIGEN_CONFIG_SRC=$$clean_path($${RS_SRC_PATH}/jsonapi-generator/src/jsonapi-generator-doxygen.conf)

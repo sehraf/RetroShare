@@ -1,0 +1,310 @@
+#!/usr/bin/python3
+
+import os
+import sys
+
+from xml.dom.minidom import parse
+from string import Template
+
+
+class MethodParam:
+	_type = ''
+	_name = ''
+	_defval = ''
+	_in = False
+	_out = False
+	_isMultiCallback = False
+	_isSingleCallback = False
+
+
+class TemplateOwn(Template):
+	delimiter = '$%'
+	pattern = '''
+	\$%(?:
+		(?P<escaped>\$\%) |   					# Escape sequence of two delimiters
+		(?P<named>[_a-z][_a-z0-9]*)%\$      |   	# delimiter and a Python identifier
+		{(?P<braced>[_a-z][_a-z0-9]*)}   |   	# delimiter and a braced identifier
+		(?P<invalid>)              				# Other ill-formed delimiter exprs
+	)
+	'''
+
+
+def getText(e):
+	rc = []
+	if e.nodeType == e.TEXT_NODE: #3:
+		rc.append(e.data)
+	else:
+		for c in e.childNodes:
+			rc.append(getText(c))
+	return ''.join(rc)
+
+
+def processFile(file):
+	dom1 = parse(file)
+
+	headerFileInfo = dom1.getElementsByTagName('location')[0].getAttribute('file')
+	headerRelPath = os.path.dirname(headerFileInfo).split('/')[-1] + '/' + os.path.basename(headerFileInfo)
+
+	for sectDef in dom1.getElementsByTagName('memberdef'):
+		if sectDef.getAttribute('kind') != 'variable' or sectDef.getElementsByTagName('jsonapi').length == 0:
+			continue
+
+		instanceName = getText(sectDef.getElementsByTagName('name')[0])
+		typeName = getText(sectDef.getElementsByTagName('ref')[0])
+
+		typeFilePath = sectDef.getElementsByTagName('ref')[0].getAttribute('refid')
+
+		dom2 = parse(doxPrefix + typeFilePath + '.xml')
+		for member in dom2.getElementsByTagName('member'):
+			refid = member.getAttribute('refid')
+			methodName = getText(member.getElementsByTagName('name')[0])
+
+			requiresAuth = True
+
+			defFilePath = refid.split('_')[0] + '.xml'
+			defFile = defFilePath
+
+			print('Looking for', typeName, methodName, 'into', typeFilePath)
+
+			defDoc = parse(doxPrefix + defFilePath)
+			memberdef = None
+			for tmpMBD in defDoc.getElementsByTagName('memberdef'):
+				tmpId = tmpMBD.getAttribute('id')
+				tmpKind = tmpMBD.getAttribute('kind')
+				tmpJsonApiTagList = tmpMBD.getElementsByTagName('jsonapi')
+
+				if tmpJsonApiTagList.length != 0 and tmpId == refid and tmpKind == 'function':
+					tmpJsonApiTag = tmpJsonApiTagList[0]
+
+					tmpAccessValue = None
+					if tmpJsonApiTag.hasAttribute('access'):
+						tmpAccessValue = tmpJsonApiTag.getAttribute('access')
+
+					requiresAuth = 'unauthenticated' != tmpAccessValue;
+
+					if 'manualwrapper' != tmpAccessValue:
+						memberdef = tmpMBD
+
+					break
+
+			if memberdef == None:
+				continue
+
+			apiPath = '/' + instanceName + '/' + methodName
+
+			retvalType = getText(memberdef.getElementsByTagName('type')[0])
+			# Apparently some xml declarations include new lines ('\n') and/or multiple spaces
+			# Strip them using python magic
+			retvalType = ' '.join(retvalType.split())
+
+			paramsMap = {}
+			orderedParamNames = []
+
+			hasInput = False
+			hasOutput = False
+			hasSingleCallback = False
+			hasMultiCallback = False
+			callbackName = ''
+			callbackParams = ''
+
+			for tmpPE in memberdef.getElementsByTagName('param'):
+				mp = MethodParam()
+
+				pName = getText(tmpPE.getElementsByTagName('declname')[0])
+				tmpDefval = tmpPE.getElementsByTagName('defval')
+				mp._defval = getText(tmpDefval[0]) if tmpDefval.length > 0 else ''
+				pType = getText(tmpPE.getElementsByTagName('type')[0])
+
+				if pType.startswith('const '): pType = pType[6:]
+				if pType.startswith('std::function'):
+					if pType.endswith('&'): pType = pType[:-1]
+					if pName.startswith('multiCallback'):
+						mp._isMultiCallback = True
+						hasMultiCallback = True
+					elif pName.startswith('callback'):
+						mp._isSingleCallback = True
+						hasSingleCallback = True
+					callbackName = pName
+					callbackParams = pType
+				else:
+					pType = pType.replace('&', '').replace(' ', '')
+				
+				# Apparently some xml declarations include new lines ('\n') and/or multiple spaces
+				# Strip them using python magic
+				pType = ' '.join(pType.split())
+				mp._defval = ' '.join(mp._defval.split())
+
+				mp._type = pType
+				mp._name = pName
+
+				paramsMap[pName] = mp
+				orderedParamNames.append(pName)
+
+			for tmpPN in memberdef.getElementsByTagName('parametername'):
+				tmpParam = paramsMap[getText(tmpPN)]
+				tmpD = tmpPN.getAttribute('direction')
+
+				if 'in' in tmpD:
+					tmpParam._in = True
+					hasInput = True
+				if 'out' in tmpD:
+					tmpParam._out = True
+					hasOutput = True
+
+			# Params sanity check
+			for pmKey in paramsMap:
+				pm = paramsMap[pmKey]
+				if not (pm._isMultiCallback or pm._isSingleCallback or pm._in or pm._out):
+					print('ERROR', 'Parameter:', pm._name, 'of:', apiPath,
+							  'declared in:', headerRelPath,
+							  'miss doxygen parameter direction attribute!',
+							  defFile)
+					sys.exit()
+
+			functionCall = '\t\t'
+			if retvalType != 'void':
+				functionCall += retvalType + ' retval = '
+				hasOutput = True
+			functionCall += instanceName + '->' + methodName + '('
+			functionCall += ', '.join(orderedParamNames) + ');\n'
+
+			print(instanceName, apiPath, retvalType, typeName, methodName)
+			for pn in orderedParamNames:
+				mp = paramsMap[pn]
+				print('\t', mp._type, mp._name, mp._in, mp._out)
+
+			inputParamsDeserialization = ''
+			if hasInput:
+				inputParamsDeserialization += '\t\t{\n' 
+				inputParamsDeserialization += '\t\t\tRsGenericSerializer::SerializeContext& ctx(cReq);\n' 
+				inputParamsDeserialization += '\t\t\tRsGenericSerializer::SerializeJob j(RsGenericSerializer::FROM_JSON);\n';
+
+			outputParamsSerialization = ''
+			if hasOutput:
+				outputParamsSerialization += '\t\t{\n'
+				outputParamsSerialization += '\t\t\tRsGenericSerializer::SerializeContext& ctx(cAns);\n'
+				outputParamsSerialization += '\t\t\tRsGenericSerializer::SerializeJob j(RsGenericSerializer::TO_JSON);\n';
+
+			paramsDeclaration = ''
+			for pn in orderedParamNames:
+				mp = paramsMap[pn]
+				paramsDeclaration += '\t\t' + mp._type + ' ' + mp._name
+				if mp._defval != '':
+					paramsDeclaration += ' = ' + mp._defval
+				paramsDeclaration += ';\n'
+				if mp._in:
+					inputParamsDeserialization += '\t\t\tRS_SERIAL_PROCESS('
+					inputParamsDeserialization += mp._name + ');\n'
+				if mp._out:
+					outputParamsSerialization += '\t\t\tRS_SERIAL_PROCESS('
+					outputParamsSerialization += mp._name + ');\n'
+
+			if hasInput: 
+				inputParamsDeserialization += '\t\t}\n'
+			if retvalType != 'void': 
+				outputParamsSerialization += '\t\t\tRS_SERIAL_PROCESS(retval);\n'
+			if hasOutput:
+				outputParamsSerialization += '\t\t}\n'
+
+			captureVars = ''
+
+			sessionEarlyClose = ''
+			if hasSingleCallback:
+				sessionEarlyClose = 'session->close();'
+
+			sessionDelayedClose = ''
+			if hasMultiCallback:
+				sessionDelayedClose = 'mService.schedule( [session](){session->close();}, std::chrono::seconds(maxWait+120) );'
+				captureVars = 'this'
+
+			callbackParamsSerialization = ''
+
+			if hasSingleCallback or hasMultiCallback or (callbackParams.find('(') + 2 < callbackParams.find(')')):
+				cbs = ''
+
+				callbackParams = callbackParams.split('(')[1]
+				callbackParams = callbackParams.split(')')[0]
+
+				cbs += '\t\t\tRsGenericSerializer::SerializeContext ctx;\n'
+
+				for cbPar in callbackParams.split(','):
+					isConst = cbPar.startswith('const ')
+					pSep = ' '
+					isRef = '&' in cbPar
+					if isRef: pSep = '&'
+					sepIndex = cbPar.rfind(pSep) + 1
+					cpt = cbPar[0:sepIndex][6:]
+					cpn = cbPar[sepIndex:]
+
+					cbs += '\t\t\tRsTypeSerializer::serial_process('
+					cbs += 'RsGenericSerializer::TO_JSON, ctx, '
+					if isConst:
+						cbs += 'const_cast<'
+						cbs += cpt
+						cbs += '>('
+					cbs += cpn
+					if isConst: cbs += ')'
+					cbs += ', "'
+					cbs += cpn
+					cbs += '" );\n'
+
+				callbackParamsSerialization += cbs
+
+			substitutionsMap = dict()
+			substitutionsMap['paramsDeclaration'] = paramsDeclaration
+			substitutionsMap['inputParamsDeserialization'] = inputParamsDeserialization
+			substitutionsMap['outputParamsSerialization'] = outputParamsSerialization
+			substitutionsMap['instanceName'] = instanceName
+			substitutionsMap['functionCall'] = functionCall
+			substitutionsMap['apiPath'] = apiPath
+			substitutionsMap['sessionEarlyClose'] = sessionEarlyClose
+			substitutionsMap['sessionDelayedClose'] = sessionDelayedClose
+			substitutionsMap['captureVars'] = captureVars
+			substitutionsMap['callbackName'] = callbackName
+			substitutionsMap['callbackParams'] = callbackParams
+			substitutionsMap['callbackParamsSerialization'] = callbackParamsSerialization
+			substitutionsMap['requiresAuth'] = 'true' if requiresAuth else 'false'
+
+			# print(substitutionsMap)
+
+			templFilePath = sourcePath
+			if hasMultiCallback  or hasSingleCallback:
+				templFilePath += '/async-method-wrapper-template.cpp.tmpl'
+			else:
+				templFilePath += '/method-wrapper-template.cpp.tmpl'
+
+			templFile = open(templFilePath, 'r')
+			wrapperDef = TemplateOwn(templFile.read())
+
+			tmp = wrapperDef.substitute(substitutionsMap)
+			wrappersDefFile.write(tmp)
+
+			cppApiIncludesSet.add('#include "' + headerRelPath + '"\n')
+
+
+if len(sys.argv) != 3:
+	print('Usage:', sys.argv[0], 'SOURCE_PATH OUTPUT_PATH')
+	sys.exit()
+
+sourcePath = str(sys.argv[1])
+outputPath = str(sys.argv[2])
+doxPrefix = outputPath + '/xml/'
+
+try:
+	wrappersDefFile = open(outputPath + '/jsonapi-wrappers.inl', 'w')
+except FileNotFoundError:
+	print('Can\'t open:', outputPath + '/jsonapi-wrappers.inl')
+try:
+	cppApiIncludesFile = open(outputPath + '/jsonapi-includes.inl', 'w');
+except FileNotFoundError:
+	print('Can\'t open:', outputPath + '/jsonapi-includes.inl')
+
+
+cppApiIncludesSet = set()
+
+for file in os.listdir(doxPrefix):
+	if file.endswith("8h.xml"):
+		processFile(os.path.join(doxPrefix, file))
+
+for incl in cppApiIncludesSet:
+	cppApiIncludesFile.write(incl)
