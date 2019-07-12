@@ -17,6 +17,12 @@ class MethodParam:
 	_isSingleCallback = False
 
 
+class typeDefinition:
+	_name = ''
+	# name -> type
+	_members = {}
+
+
 class TemplateOwn(Template):
 	delimiter = '$%'
 	pattern = '''
@@ -31,6 +37,63 @@ class TemplateOwn(Template):
 
 def getText(e):
 	return "".join(e.itertext())
+
+
+def processTypeRef(elem):
+	typeRefId = elem.attrib['refid']
+	typeRefName = elem.text
+
+	if '_8h_' in typeRefId:
+		typeRefId = typeRefId.split('_')[0] + '_' + typeRefId.split('_')[1]
+	elif '_1_' in typeRefId:
+		print('...')
+	elif '_' in typeRefId:
+		typeRefId = typeRefId.split('_')[0]
+
+	processType(typeRefName, typeRefId)
+
+
+def processType(typeName, typeFile):
+	if typeName in typeDefinitions:
+		return
+
+	typeFilePath = typeFile + '.xml'
+	print('Looking for type', typeName, 'into', typeFilePath)
+
+	try:
+		domType = ET.parse(doxPrefix + typeFilePath).getroot()
+	except FileNotFoundError:
+		print('Can\'t open:', doxPrefix + typeFilePath)
+
+	td = typeDefinition()
+	td._name = typeName
+	td._members = {} # why is this required?
+	typeDefinitions[typeName] = td # add entry before diving into recursion to avoid endless recursion
+
+	for variableDef in domType.findall('.//memberdef'):
+		# skip functions
+		kind = variableDef.attrib['kind']
+		if kind == 'function' or kind == 'typedef':
+			print('skipping', kind, typeName)
+			break
+
+		varName = variableDef.find('name').text
+
+		varTypeElem = variableDef.find('type')
+		if varTypeElem == None:
+			print('no type! TODO FIX ME')
+			break;
+		varType = getText(varTypeElem)
+
+		typeRef = varTypeElem.find('ref')
+
+		print(' -> found member:', kind, varType, varName)
+		td._members[varName] = {'_kind': kind, '_varType': varType}
+
+		if typeRef != None:
+			processTypeRef(typeRef)
+
+	typeDefinitions[typeName] = td
 
 
 def processFile(file):
@@ -54,7 +117,7 @@ def processFile(file):
 		try:
 			dom2 = ET.parse(doxPrefix + typeFilePath + '.xml').getroot()
 		except FileNotFoundError:
-			print('Can\'t open:', oxPrefix + typeFilePath + '.xml')
+			print('Can\'t open:', doxPrefix + typeFilePath + '.xml')
 
 		for member in dom2.findall('.//member'):
 			refid = member.attrib['refid']
@@ -133,7 +196,11 @@ def processFile(file):
 					callbackParams = pType
 				else:
 					pType = pType.replace('&', '').replace(' ', '')
-				
+
+				typeRef = tmpPE.find('type').find('ref')
+				if typeRef != None:
+					processTypeRef(typeRef)
+
 				# Apparently some xml declarations include new lines ('\n') and/or multiple spaces
 				# Strip them using python magic
 				pType = ' '.join(pType.split())
@@ -306,6 +373,7 @@ except FileNotFoundError:
 	print('Can\'t open:', outputPath + '/jsonapi-includes.inl')
 
 cppApiIncludesSet = set()
+typeDefinitions = {}
 
 try:
 	for file in os.listdir(doxPrefix):
@@ -316,3 +384,8 @@ except FileNotFoundError:
 
 for incl in cppApiIncludesSet:
 	cppApiIncludesFile.write(incl)
+
+for k, td in typeDefinitions.items():
+	print(k, td._name)
+	for n, t in td._members.items():
+		print(' -> ', t['_kind'], t['_varType'], n)
