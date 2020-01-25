@@ -23,6 +23,7 @@
 #include <retroshare/rsplugin.h>
 #include <rshare.h>
 #include "GeneralPage.h"
+#include "BackupPage.h"
 #include "ServerPage.h"
 #include "NotifyPage.h"
 #include "CryptoPage.h"
@@ -174,6 +175,7 @@ SettingsPage::initStackedWidget()
     QObject::connect(webui_p,SIGNAL(passwordChanged()),jsonapi_p,SLOT(load()));
 #endif
 #endif
+    addPage(new BackupPage() ); // Backup
 
 	 // add widgets from plugins
 	for(int i=0;i<rsPlugins->nbPlugins();++i)

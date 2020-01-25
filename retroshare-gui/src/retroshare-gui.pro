@@ -85,9 +85,12 @@ rs_gui_cmark {
 	}
 }
 
-FORMS   += TorControl/TorControlWindow.ui
-SOURCES += TorControl/TorControlWindow.cpp
-HEADERS += TorControl/TorControlWindow.h
+FORMS   += TorControl/TorControlWindow.ui \
+    gui/settings/BackupPage.ui
+SOURCES += TorControl/TorControlWindow.cpp \
+    gui/settings/BackupPage.cpp
+HEADERS += TorControl/TorControlWindow.h \
+    gui/settings/BackupPage.h
 
 #QMAKE_CFLAGS += -fmudflap 
 #LIBS *= /usr/lib/gcc/x86_64-linux-gnu/4.4/libmudflap.a /usr/lib/gcc/x86_64-linux-gnu/4.4/libmudflapth.a
